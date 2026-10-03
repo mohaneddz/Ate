@@ -31,6 +31,48 @@ Webetu 2.5.0 and stops if it cannot identify the expected signing code.
 
 ## Use it
 
+The package installs `res.exe` into Python's Scripts directory. If that
+directory is already on your user PATH, open a **new Command Prompt** and use:
+
+```cmd
+res 3
+res until 10-12
+res show
+res log 30
+res plan
+res doctor
+```
+
+`res 3` saves a rolling order for the next three days and tries it immediately.
+The scheduler keeps that horizon filled whenever the PC is signed in and online.
+`res until 10-12` saves a fixed end date and tries the available dates now. For
+short dates, the CLI chooses the next future occurrence; use `2026-10-12` for an
+explicit year. Booking is limited to tomorrow through three days ahead, so
+later dates remain in the order until their window opens.
+
+`res show` displays confirmed bookings from today onward. `res log 30` displays
+reservations and local CLI activity from the last 30 calendar days; substitute
+any number from 1 to 366. Both use a cached encrypted reservation snapshot if
+the service is temporarily unavailable. These other commands are also useful:
+
+```cmd
+res today
+res preview 10-05
+res date 10-05
+res sync
+res pause
+res resume
+res depots
+res help
+```
+
+`res date` submits missing meals for one date, `res preview` shows the date
+without booking, and `res sync` rechecks the current standing order. Existing
+bookings and uncertain attempts still receive the same duplicate protection.
+
+The underlying `reserve-meals` command remains available for setup and more
+specific account management:
+
 ```powershell
 # Read available restaurants and current reservations.
 python -m reserve_cli depots
