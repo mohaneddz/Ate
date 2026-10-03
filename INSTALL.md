@@ -1,20 +1,26 @@
 # Install Ate on Windows
 
-The packaged release needs **Windows 10 or 11, 64-bit**, internet access, and
-the original **Webetu 2.5.0 APK or XAPK**. It does not need Python. Do not send
-your student number or password with the package.
+The packaged release needs **Windows 10 or 11, 64-bit** and internet access.
+It does not need Python or an APK/XAPK. Keep your account details on your own PC.
 
-1. Extract the whole `Ate-0.4.0-win64.zip` archive.
+1. Extract the whole `Ate-0.5.0-win64.zip` archive.
 2. Double-click `install.cmd` in the extracted folder. Keep its `scripts`
    subfolder beside it.
-3. Enter the path to your own original Webetu APK/XAPK. Dragging the file into
-   the terminal usually pastes its path.
-4. Enter your student number and password. Password input is hidden. Choose a
+3. Enter your student number and password. Password input is hidden. Choose a
    dorm and main restaurant from the live list, then choose the number of days
    to keep booked.
-5. The installer saves your account encrypted for your Windows user, adds
+4. The installer saves your account encrypted for your Windows user, adds
    `ate` to your user PATH, installs the background task, and starts one check.
-6. Open a **new Command Prompt** and run `ate doctor`, then `ate show`.
+5. Open a **new Command Prompt** and run `ate doctor`, then `ate show`.
+
+## Install directly from a clone
+
+Install Python 3.11 or newer, then run `git clone https://github.com/mohaneddz/ate.git`,
+open the `ate` folder, and double-click `install.cmd`. It installs the small
+Python package, prompts for your account and restaurants, and registers the
+same background task. The repository is private; collaborators need access.
+You can also run `python -m pip install -e .` followed by `res auth` and
+`powershell -ExecutionPolicy Bypass -File scripts/install-schedule.ps1`.
 
 If `ate` is not recognized in a new Command Prompt, sign out of Windows and
 sign back in so Explorer picks up the updated user PATH. You can also run
@@ -26,8 +32,27 @@ activity. `ate help` lists all commands. Breakfast and dinner use your chosen
 dorm; Sunday–Thursday lunch uses your chosen main restaurant. Friday and
 Saturday have no automatic lunch.
 
-To check an APK/XAPK before installing, run `ate check-app PATH` from any copy
-of the packaged executable. It only reads the file on your PC.
+Run `ate auth` (or `res auth` after a source install) whenever you need to
+recheck login or change a password or restaurant. The command verifies the new
+details before saving them and keeps your existing standing order. To import a
+file instead of typing credentials, use `res auth info.env` or
+`res auth credentials.md`. JSON also works. Example file:
+
+```text
+student=YOUR_STUDENT_NUMBER
+password=YOUR_PASSWORD
+dorm_id=YOUR_DORM_ID
+main_id=YOUR_MAIN_RESTAURANT_ID
+days=3
+```
+
+The restaurant IDs and days are optional. Without IDs, the command lists the
+restaurants available to your account and asks you to choose. `days` is used
+only when no standing order exists. A Markdown file may use `student: ...` and
+`password: ...` lines or a two-column table. Keep this file out of Git;
+`*.env` and `credentials*` files are ignored by this repository.
+Source and packaged commands share `%LOCALAPPDATA%\Ate\state`. The source
+installer copies an older checkout's `.reserve` data there if needed.
 
 ## What starts automatically
 
@@ -65,5 +90,5 @@ task, and removes its PATH entry. The old data folder remains as a backup.
 
 Setup needs the two Webetu services to authenticate and list restaurants. If
 it stops, no background task is installed. Run `install.cmd` again once the
-service is available. The importer supports the bytecode in Webetu 2.5.0; a
-newer original app may need a CLI update.
+service is available. If the service changes its signing requirements, Ate
+will need an update.

@@ -1,38 +1,39 @@
 # Ate 🍽️
 
-A small Windows CLI that reserves Webetu meals when your PC is online. Based on
-the requests recovered from the original Webetu 2.5.0 Android app and verified
-against a personal account.
+A small Windows CLI that reserves Webetu meals when your PC is online. Setup
+requires a student account, without an APK or XAPK.
 
 For a Windows install without Python, download the release ZIP, extract it and
-run `install.cmd`. The [install guide](INSTALL.md) explains first-run setup,
-how the scheduled task starts, updates, and removal.
+run `install.cmd`. To install from a clone, install Python 3.11+ and run
+`install.cmd` from the repository. The [install guide](INSTALL.md) covers both
+paths, authentication, automatic startup, updates, and removal.
 
 - Breakfast and dinner: your dorm, every day.
 - Lunch: your chosen main restaurant, Sunday–Thursday.
 - Existing bookings are checked first; conflicting bookings stop the run.
 - Each submission is read back from the server before being called confirmed.
-- Passwords and imported app signing material stay in Windows DPAPI encrypted
-  files under `.reserve/` for a source install or `%LOCALAPPDATA%\Ate\state`
-  for a packaged install. Runtime session tokens stay in memory.
+- Passwords stay in Windows DPAPI encrypted files under
+  `%LOCALAPPDATA%\Ate\state` for both install methods. The fixed app signing
+  constant is included in the client. Runtime session tokens stay in memory.
 - Credentials, APKs, analysis output, and local logs are excluded from Git.
 
 ## Setup
 
-Use Python 3.11+ on Windows, under the Windows user who will run the schedule:
+From a clone on Windows, under the Windows user who will run the schedule:
 
 ```powershell
-python -m pip install -e ".[import]"
-python -m reserve_cli setup --credentials info.env --app original.xapk --dorm-id 185 --main-id 569
+git clone https://github.com/mohaneddz/ate.git
+cd ate
+.\install.cmd
 ```
 
-The two IDs above are examples; use IDs for your own chosen locations. The
-credential file uses `student=...` and `password=...`. Setup leaves that original
-file in place; it is not needed for subsequent runs. Do not commit it.
-
-The importer reads the signing constant from your own original APK/XAPK with
-[hermes-dec](https://github.com/P1sec/hermes-dec). It accepts the bytecode used by
-Webetu 2.5.0 and stops if it cannot identify the expected signing code.
+The installer installs the Python package, runs the `res auth` flow, then registers
+the background task. `res auth` asks for your student number, hidden password,
+and dorm/main restaurants from your account's live list. Use
+`res auth info.env` or `res auth credentials.md` to import account fields from a
+file. Optional `dorm_id`, `main_id`, and `days` fields make first setup
+noninteractive. See the [install guide](INSTALL.md) for formats and examples.
+Do not commit credential files.
 
 ## Use it
 
@@ -75,7 +76,12 @@ ate help
 `ate date` submits missing meals for one date, `ate preview` shows the date
 without booking, and `ate sync` rechecks the current standing order. Existing
 bookings and uncertain attempts still receive the same duplicate protection.
-The old `res` command remains an alias in source installs.
+The old `res` command remains an alias in source and packaged installs.
+
+After a password change or login problem, run `ate auth` to validate and save
+new details. It keeps your standing order and clears the automatic login block
+only after a successful login. A bad password or unavailable service leaves
+the previous account data in place.
 
 The underlying `reserve-meals` command remains available for setup and more
 specific account management:
@@ -122,12 +128,12 @@ login attempts. The task runs while your Windows user is signed in, including
 when the screen is locked. It does not wake a sleeping or powered-off PC.
 
 The scheduler uses `pythonw.exe` when available to avoid opening terminal windows.
-Results and errors go to `.reserve/runs.jsonl`. The `--state-dir PATH` option
+Results and errors go to `%LOCALAPPDATA%\Ate\state\runs.jsonl`. The `--state-dir PATH` option
 goes before the command when using a different local data folder.
 
 ```powershell
 Get-ScheduledTaskInfo -TaskName 'Ate'
-Get-Content .reserve/runs.jsonl -Tail 20
+Get-Content "$env:LOCALAPPDATA\Ate\state\runs.jsonl" -Tail 20
 Disable-ScheduledTask -TaskName 'Ate'
 ```
 
@@ -157,6 +163,6 @@ python -m unittest discover -s tests -v
 
 Tests use fake services. They never submit live reservations.
 
-To build the standalone Windows ZIP, install the optional importer and
-PyInstaller, then run `scripts/build-release.ps1`. The package excludes local
-account data, APKs, and analysis files.
+To build the standalone Windows ZIP, install PyInstaller and run
+`scripts/build-release.ps1`. The package excludes local account data, APKs,
+and analysis files.
