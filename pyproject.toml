@@ -4,16 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reserve-meals-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "Personal Webetu meal reservations from a Windows PC"
 requires-python = ">=3.11"
-dependencies = ["requests>=2.32,<3", "python-dotenv>=1,<2", "tzdata>=2025.1"]
+dependencies = ["requests>=2.32,<3", "python-dotenv>=1,<2", "tzdata>=2025.1", "rich>=13.9,<15"]
 
 [project.optional-dependencies]
 import = ["hermes-dec==0.1.7"]
 
 [project.scripts]
 reserve-meals = "reserve_cli.cli:main"
+res = "reserve_cli.short:main"
 
 [tool.setuptools.packages.find]
 include = ["reserve_cli*"]
