@@ -10,14 +10,15 @@ if (-not $ProjectRoot) {
     $ProjectRoot = Split-Path -Parent $PSScriptRoot
 }
 $rootPath = (Resolve-Path -LiteralPath $ProjectRoot).Path
+$statePath = Join-Path $env:LOCALAPPDATA 'Ate\state'
 if (-not $Python) {
     $Python = (Get-Command python.exe -ErrorAction Stop).Source
 }
 $pythonPath = (Resolve-Path -LiteralPath $Python).Path
-if (-not (Test-Path -LiteralPath (Join-Path $rootPath '.reserve\profile.bin'))) {
+if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
     throw 'Run the CLI setup command before installing the scheduler.'
 }
-if (-not (Test-Path -LiteralPath (Join-Path $rootPath '.reserve\order.bin'))) {
+if (-not (Test-Path -LiteralPath (Join-Path $statePath 'order.bin'))) {
     throw 'Set a standing order before installing the scheduler.'
 }
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -25,13 +26,13 @@ if ($existing -and ($existing.Actions.WorkingDirectory -ne $rootPath -or $existi
     throw 'A different task uses this name. Choose another -TaskName.'
 }
 # Use pythonw to avoid flashing a terminal every five minutes. The CLI records
-# scheduled results and errors in .reserve/runs.jsonl.
+# scheduled results and errors in the per-user state folder.
 $pythonWindowless = Join-Path (Split-Path -Parent $pythonPath) 'pythonw.exe'
 if (Test-Path -LiteralPath $pythonWindowless) {
     $pythonPath = $pythonWindowless
 }
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$arguments = '-m reserve_cli --state-dir "{0}" run' -f (Join-Path $rootPath '.reserve')
+$arguments = '-m reserve_cli --state-dir "{0}" run' -f $statePath
 $action = New-ScheduledTaskAction -Execute $pythonPath -Argument $arguments -WorkingDirectory $rootPath
 $triggers = @(
     (New-ScheduledTaskTrigger -AtLogOn -User $currentUser),

@@ -33,6 +33,7 @@ if ($existing -and -not $NoSchedule) { Stop-ScheduledTask -TaskName $taskName -E
 
 $exePath = Join-Path $binPath 'ate.exe'
 Copy-Item -LiteralPath $sourceExe -Destination $exePath -Force
+Copy-Item -LiteralPath (Join-Path $packagePath 'res.cmd') -Destination (Join-Path $binPath 'res.cmd') -Force
 Copy-Item -LiteralPath (Join-Path $packagePath 'uninstall.cmd') -Destination (Join-Path $binPath 'uninstall.cmd') -Force
 New-Item -ItemType Directory -Path (Join-Path $binPath 'scripts') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $packagePath 'scripts\hidden-run.vbs') -Destination (Join-Path $binPath 'scripts\hidden-run.vbs') -Force
@@ -68,11 +69,11 @@ if ($defaultInstall -and -not (Test-Path -LiteralPath (Join-Path $statePath 'pro
 
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
     if ($NoSetup) { throw 'No account is configured. Run the installer without -NoSetup.' }
-    & $exePath setup
+    & $exePath auth
     if ($LASTEXITCODE -ne 0) { throw 'Account setup did not finish. No scheduler was installed.' }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'order.bin'))) {
-    throw 'No standing order is configured. Run ate setup or set an order first.'
+    throw 'No standing order is configured. Run ate auth or set an order first.'
 }
 
 $oldUserPath = [Environment]::GetEnvironmentVariable('Path','User')

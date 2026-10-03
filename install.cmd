@@ -1,6 +1,10 @@
 @echo off
 setlocal
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-package.ps1"
+if exist "%~dp0ate.exe" (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-package.ps1"
+) else (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-source.ps1"
+)
 if errorlevel 1 (
     echo.
     echo Installation stopped. Press any key to close this window.
