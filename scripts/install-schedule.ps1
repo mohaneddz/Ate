@@ -1,6 +1,6 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string]$TaskName = 'Couscous Cron',
+    [string]$TaskName = 'Ate',
     [string]$ProjectRoot = '',
     [string]$Python = '',
     [ValidateRange(1, 60)][int]$EveryMinutes = 5
@@ -21,7 +21,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $rootPath '.reserve\order.bin'))) {
     throw 'Set a standing order before installing the scheduler.'
 }
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-if ($existing -and ($existing.Actions.WorkingDirectory -ne $rootPath -or $existing.Description -notlike 'Couscous Cron:*')) {
+if ($existing -and ($existing.Actions.WorkingDirectory -ne $rootPath -or $existing.Description -notlike 'Ate:*')) {
     throw 'A different task uses this name. Choose another -TaskName.'
 }
 # Use pythonw to avoid flashing a terminal every five minutes. The CLI records
@@ -44,6 +44,6 @@ $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interact
 if ($PSCmdlet.ShouldProcess($TaskName, 'Register online reservation checks at sign-in and every five minutes')) {
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
         -Settings $settings -Principal $principal `
-        -Description 'Couscous Cron: fulfill the current personal meal order once daily when online.' -Force | Out-Null
+        -Description 'Ate: fulfill the current personal meal order once daily when online.' -Force | Out-Null
     Write-Output "Installed '$TaskName'. Checks every $EveryMinutes minutes while this Windows user is signed in and online."
 }

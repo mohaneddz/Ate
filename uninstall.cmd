@@ -6,5 +6,5 @@ if errorlevel 1 (
     pause >nul
     exit /b 1
 )
-echo Couscous Cron was removed. Press any key to close this window.
+echo Ate was removed. Press any key to close this window.
 pause >nul

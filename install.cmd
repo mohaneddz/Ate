@@ -8,6 +8,6 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
-echo Open a new Command Prompt and type: res show
+echo Open a new Command Prompt and type: ate show
 echo Press any key to close this window.
 pause >nul

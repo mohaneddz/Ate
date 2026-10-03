@@ -8,26 +8,30 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not $PackageRoot) { $PackageRoot = Split-Path -Parent $PSScriptRoot }
-if (-not $InstallRoot) { $InstallRoot = Join-Path $env:LOCALAPPDATA 'CouscousCron' }
+$defaultInstall = -not $InstallRoot
+if ($defaultInstall) { $InstallRoot = Join-Path $env:LOCALAPPDATA 'Ate' }
 $packagePath = (Resolve-Path -LiteralPath $PackageRoot).Path
 $installPath = [System.IO.Path]::GetFullPath($InstallRoot)
+$legacyPath = Join-Path $env:LOCALAPPDATA 'CouscousCron'
+$legacyBin = Join-Path $legacyPath 'bin'
+$legacyState = Join-Path $legacyPath 'state'
 $binPath = Join-Path $installPath 'bin'
 $statePath = Join-Path $installPath 'state'
-$sourceExe = Join-Path $packagePath 'res.exe'
-if (-not (Test-Path -LiteralPath $sourceExe -PathType Leaf)) { throw 'res.exe is missing from this package.' }
+$sourceExe = Join-Path $packagePath 'ate.exe'
+if (-not (Test-Path -LiteralPath $sourceExe -PathType Leaf)) { throw 'ate.exe is missing from this package.' }
 if (-not (Test-Path -LiteralPath (Join-Path $packagePath 'scripts\hidden-run.vbs') -PathType Leaf)) {
     throw 'The background runner is missing from this package.'
 }
 New-Item -ItemType Directory -Path $binPath,$statePath -Force | Out-Null
 
-$taskName = 'Couscous Cron'
+$taskName = 'Ate'
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-if ($existing -and $existing.Description -notlike 'Couscous Cron:*') {
-    throw 'A different scheduled task uses the Couscous Cron name.'
+if ($existing -and $existing.Description -notlike 'Ate:*') {
+    throw 'A different scheduled task uses the Ate name.'
 }
 if ($existing -and -not $NoSchedule) { Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue }
 
-$exePath = Join-Path $binPath 'res.exe'
+$exePath = Join-Path $binPath 'ate.exe'
 Copy-Item -LiteralPath $sourceExe -Destination $exePath -Force
 Copy-Item -LiteralPath (Join-Path $packagePath 'uninstall.cmd') -Destination (Join-Path $binPath 'uninstall.cmd') -Force
 New-Item -ItemType Directory -Path (Join-Path $binPath 'scripts') -Force | Out-Null
@@ -49,6 +53,18 @@ if ($MigrateFrom) {
     }
     Write-Host 'Existing encrypted account and order copied for this Windows user.' -ForegroundColor Green
 }
+if ($defaultInstall -and -not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin')) -and
+    (Test-Path -LiteralPath (Join-Path $legacyState 'profile.bin') -PathType Leaf)) {
+    foreach ($name in @('profile.bin','order.bin','run_state.bin','journal.bin',
+                         'reservation_cache.bin','depot_cache.bin','runs.jsonl')) {
+        $from = Join-Path $legacyState $name
+        $to = Join-Path $statePath $name
+        if ((Test-Path -LiteralPath $from -PathType Leaf) -and -not (Test-Path -LiteralPath $to)) {
+            Copy-Item -LiteralPath $from -Destination $to
+        }
+    }
+    Write-Host 'Existing encrypted account and order migrated from Couscous Cron.' -ForegroundColor Green
+}
 
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
     if ($NoSetup) { throw 'No account is configured. Run the installer without -NoSetup.' }
@@ -56,12 +72,15 @@ if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
     if ($LASTEXITCODE -ne 0) { throw 'Account setup did not finish. No scheduler was installed.' }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'order.bin'))) {
-    throw 'No standing order is configured. Run res setup or set an order first.'
+    throw 'No standing order is configured. Run ate setup or set an order first.'
 }
 
 $oldUserPath = [Environment]::GetEnvironmentVariable('Path','User')
 $entries = @($oldUserPath -split ';' | Where-Object { $_.Trim() })
 $entries = @($entries | Where-Object { $_.TrimEnd('\') -ine $binPath.TrimEnd('\') })
+if ($defaultInstall) {
+    $entries = @($entries | Where-Object { $_.TrimEnd('\') -ine $legacyBin.TrimEnd('\') })
+}
 [Environment]::SetEnvironmentVariable('Path', (($binPath) + ';' + ($entries -join ';')).TrimEnd(';'), 'User')
 $env:Path = $binPath + ';' + $env:Path
 
@@ -81,11 +100,21 @@ if (-not $NoSchedule) {
     $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggers `
         -Settings $settings -Principal $principal `
-        -Description 'Couscous Cron: fulfill the current personal meal order once daily when online.' -Force | Out-Null
+        -Description 'Ate: fulfill the current personal meal order once daily when online.' -Force | Out-Null
+    if ($defaultInstall) {
+        $oldTask = Get-ScheduledTask -TaskName 'Couscous Cron' -ErrorAction SilentlyContinue
+        $oldExe = Join-Path $legacyBin 'res.exe'
+        if ($oldTask -and $oldTask.Description -like 'Couscous Cron:*' -and
+            $oldTask.Actions.Arguments.IndexOf($oldExe, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            Stop-ScheduledTask -TaskName 'Couscous Cron' -ErrorAction SilentlyContinue
+            Unregister-ScheduledTask -TaskName 'Couscous Cron' -Confirm:$false
+            Write-Host 'Previous Couscous Cron background task replaced.' -ForegroundColor Green
+        }
+    }
     Write-Host 'Background checks installed for sign-in and every five minutes while online.' -ForegroundColor Green
     Start-ScheduledTask -TaskName $taskName
 } else {
     Write-Host 'Scheduler registration skipped for this test install.' -ForegroundColor Yellow
 }
 Write-Host "Installed at $installPath" -ForegroundColor Cyan
-Write-Host 'Open a new Command Prompt, then run: res show' -ForegroundColor Cyan
+Write-Host 'Open a new Command Prompt, then run: ate show' -ForegroundColor Cyan
