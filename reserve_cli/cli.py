@@ -12,6 +12,7 @@ from .api import ApiError, Client
 from .booking import (BOOKING_WINDOW_DAYS, BookingError, apply_plan, make_plan,
                       meal_number, MEALS, order_dates)
 from .store import Store, StoreError
+from .paths import default_state_dir
 
 
 def now_local():
@@ -20,7 +21,7 @@ def now_local():
 
 def parser():
     root = argparse.ArgumentParser(prog="reserve-meals", description="Couscous Cron: personal meal reservations.")
-    root.add_argument("--state-dir", type=Path, default=Path(__file__).resolve().parents[1] / ".reserve")
+    root.add_argument("--state-dir", type=Path, default=default_state_dir())
     commands = root.add_subparsers(dest="command", required=True)
     setup = commands.add_parser("setup", help="Import credentials and original app into encrypted local storage")
     setup.add_argument("--credentials", type=Path, required=True)

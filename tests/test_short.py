@@ -1,7 +1,9 @@
 from datetime import date, datetime
 import io
 import json
+import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -10,7 +12,9 @@ from zoneinfo import ZoneInfo
 from rich.console import Console
 
 from reserve_cli.api import ApiError
+from reserve_cli.paths import default_state_dir
 from reserve_cli.short import (bookings_table, fetch_bookings, legacy, parse_day,
+                               setup_wizard,
                                read_activity, run)
 from reserve_cli.store import Store
 
@@ -22,6 +26,11 @@ class ShortCommandTests(unittest.TestCase):
         self.store = Store(Path(self.temp.name))
         self.output = io.StringIO()
         self.console = Console(file=self.output, width=100, force_terminal=True, color_system="truecolor")
+
+    def test_frozen_executable_uses_stable_user_state_folder(self):
+        with patch.object(sys, "frozen", True, create=True), \
+             patch.dict(os.environ, {"LOCALAPPDATA": self.temp.name}):
+            self.assertEqual(default_state_dir(), Path(self.temp.name) / "CouscousCron" / "state")
 
     def test_yearless_date_uses_next_occurrence(self):
         self.assertEqual(parse_day("10-05", date(2026, 10, 3)), date(2026, 10, 5))
@@ -87,6 +96,34 @@ class ShortCommandTests(unittest.TestCase):
             result, cached = fetch_bookings(self.store)
         self.assertEqual(result, rows)
         self.assertEqual(cached, "2026-10-03T18:00:00+01:00")
+
+    def test_setup_wizard_saves_only_encrypted_account_data(self):
+        app = Path(self.temp.name) / "original.xapk"
+        app.write_bytes(b"fake fixture")
+        replies = iter([str(app), "test-student", "10", "20", "3"])
+        self.console.input = lambda _: next(replies)
+        depots = [
+            {"id": 10, "nameFR": "Dorm", "breakfast": True, "lunch": True, "dinner": True},
+            {"id": 20, "nameFR": "Main", "breakfast": False, "lunch": True, "dinner": False},
+        ]
+        with patch("reserve_cli.import_app.import_signing_key", return_value=("test-key", "a" * 64)), \
+             patch("reserve_cli.short.getpass.getpass", return_value="private-test-password"), \
+             patch("reserve_cli.short.Client") as client:
+            client.return_value.depots.return_value = depots
+            self.assertEqual(setup_wizard(self.console, self.store), 0)
+        profile = self.store.read("profile")
+        self.assertEqual((profile["dorm_id"], profile["main_id"]), (10, 20))
+        self.assertEqual(self.store.read("order")["days"], 3)
+        self.assertNotIn(b"private-test-password", (self.store.directory / "profile.bin").read_bytes())
+        self.assertNotIn("private-test-password", self.output.getvalue())
+
+    def test_check_app_uses_local_file_without_credentials(self):
+        app = Path(self.temp.name) / "webetu.xapk"
+        app.write_bytes(b"test fixture")
+        with patch("reserve_cli.import_app.import_signing_key", return_value=("test-key", "b" * 64)) as importer:
+            self.assertEqual(run(["check-app", str(app)], self.console, self.store), 0)
+        importer.assert_called_once_with(app)
+        self.assertNotIn("test-key", self.output.getvalue())
 
 
 if __name__ == "__main__":

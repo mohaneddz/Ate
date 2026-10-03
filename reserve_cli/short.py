@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, datetime, timedelta
+import getpass
 import io
 import json
 from pathlib import Path
@@ -21,8 +22,9 @@ from . import cli
 from .api import ApiError, Client
 from .booking import BookingError, MEALS, make_plan, meal_number, order_dates
 from .store import Store, StoreError
+from .paths import default_state_dir
 
-STATE_DIR = Path(__file__).resolve().parents[1] / ".reserve"
+STATE_DIR = default_state_dir()
 MAX_DAYS = 366
 
 
@@ -211,6 +213,7 @@ def help_screen(console: Console) -> None:
     table.add_column("Command", style="bold bright_cyan", no_wrap=True)
     table.add_column("What it does", style="white")
     for command, detail in [
+        ("res setup", "First-run wizard for account, restaurants and schedule."),
         ("res 3", "Keep the next 3 days booked; run now and keep checking online."),
         ("res until 10-12", "Book through October 12; year is optional."),
         ("res show", "Live table of current and upcoming reservations."),
@@ -221,10 +224,73 @@ def help_screen(console: Console) -> None:
         ("res pause / resume", "Pause or resume automatic booking."),
         ("res depots", "Show available restaurants and IDs."),
         ("res doctor", "Show setup, scheduler and recent run health."),
+        ("res check-app FILE", "Check that an original Webetu APK/XAPK can be imported."),
     ]:
         table.add_row(command, detail)
     console.print(table)
     console.print(plain("Breakfast and dinner use the dorm. Lunch uses the main restaurant Sunday–Thursday.", "dim"))
+
+
+def setup_wizard(console: Console, store: Store) -> int:
+    from .import_app import import_signing_key
+    import uuid
+
+    with store.lock():
+        if store.read("profile"):
+            console.print(plain("This account is already configured. Run res doctor or res show.", "yellow"))
+            return 0
+        heading(console, "Welcome to Couscous Cron", "Your account stays on this Windows PC")
+        app_input = console.input("Original Webetu 2.5.0 APK/XAPK path: ").strip().strip('"')
+        app = Path(app_input).expanduser()
+        if not app.is_file() or app.suffix.lower() not in (".apk", ".xapk"):
+            raise ValueError("Choose an existing .apk or .xapk file from the original Webetu app.")
+        console.print(plain("Reading the app locally…", "dim"))
+        key, fingerprint = import_signing_key(app)
+        student = console.input("Student number: ").strip()
+        password = getpass.getpass("Password (hidden): ")
+        if not student or not password:
+            raise ValueError("Student number and password are required.")
+        profile = {"student": student, "password": password, "signing_key": key,
+                   "app_sha256": fingerprint}
+        client = Client(profile)
+        try:
+            console.print(plain("Checking your account and restaurants…", "dim"))
+            client.login()
+            depots = client.depots()
+        finally:
+            client.close()
+        dorm_options = [d for d in depots if d.get("breakfast") and d.get("dinner")]
+        main_options = [d for d in depots if d.get("lunch")]
+        if not dorm_options or not main_options:
+            raise BookingError("The meal service did not offer suitable restaurants to this account.")
+
+        def choose(label: str, options: list[dict]) -> int:
+            table = Table(title=label, box=box.ROUNDED, border_style="bright_black")
+            table.add_column("ID", style="cyan", justify="right")
+            table.add_column("Restaurant")
+            for item in options:
+                table.add_row(str(item["id"]), plain(item.get("nameFR") or item.get("nameAR") or "?"))
+            console.print(table)
+            permitted = {int(item["id"]) for item in options}
+            for _ in range(3):
+                raw = console.input(f"{label} ID: ").strip()
+                if raw.isdecimal() and int(raw) in permitted:
+                    return int(raw)
+                console.print(plain("Choose an ID shown in the table.", "yellow"))
+            raise ValueError("Restaurant selection was not completed.")
+
+        profile["dorm_id"] = choose("Dorm for breakfast and dinner", dorm_options)
+        profile["main_id"] = choose("Main restaurant for Sunday–Thursday lunch", main_options)
+        raw_days = console.input("Keep the next how many days booked? [3]: ").strip() or "3"
+        if not raw_days.isdecimal() or not 1 <= int(raw_days) <= MAX_DAYS:
+            raise ValueError("Choose a number from 1 to 366 days.")
+        order = {"kind": "days", "days": int(raw_days), "paused": False, "revision": str(uuid.uuid4())}
+        store.write("profile", profile)
+        store.write("order", order)
+        store.write("run_state", {})
+        console.print(plain("✓ Setup complete. Login details are encrypted for this Windows user.", "green"))
+        console.print(plain("The installer will start the background checker and check this order now.", "dim"))
+        return 0
 
 
 def doctor(console: Console, store: Store) -> None:
@@ -266,6 +332,25 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         help_screen(console)
         return 0
     command = argv[0].lower()
+    if command == "setup":
+        if len(argv) != 1:
+            raise ValueError("Use res setup without extra arguments.")
+        return setup_wizard(console, store)
+    if command == "background":
+        if len(argv) != 1:
+            raise ValueError("Background runner takes no arguments.")
+        return cli.main(["--state-dir", str(store.directory), "run"])
+    if command == "check-app":
+        if len(argv) != 2:
+            raise ValueError("Use res check-app PATH-TO-ORIGINAL-APP.")
+        from .import_app import import_signing_key
+        app = Path(argv[1].strip().strip('"')).expanduser()
+        if not app.is_file() or app.suffix.lower() not in (".apk", ".xapk"):
+            raise ValueError("Choose an existing original Webetu .apk or .xapk file.")
+        _, fingerprint = import_signing_key(app)
+        heading(console, "Original app recognized", f"SHA256 {fingerprint[:16]}…")
+        console.print(plain("This app can be used in first-run setup.", "green"))
+        return 0
     if command.isdecimal():
         if len(argv) != 1 or not 1 <= int(command) <= MAX_DAYS:
             raise ValueError("Use res N with a number from 1 to 366.")
