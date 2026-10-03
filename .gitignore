@@ -1,0 +1,20 @@
+# Account credentials and local session data
+*.env
+pass
+credentials*
+.reserve/
+
+# Original apps and local reverse-engineering output
+*.apk
+*.xapk
+*.apks
+.analysis/
+
+# Python environments and build output
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
