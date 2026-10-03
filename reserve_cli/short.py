@@ -21,9 +21,11 @@ from rich.text import Text
 
 from . import cli
 from .api import ApiError, Client
+from .auth import load_credentials
 from .booking import BookingError, MEALS, make_plan, meal_number, order_dates
 from .store import Store, StoreError
 from .paths import default_state_dir
+from .signing import SIGNING_KEY
 
 STATE_DIR = default_state_dir()
 MAX_DAYS = 366
@@ -155,7 +157,7 @@ def activity_table(events: list[dict]) -> Table:
 def fetch_bookings(store: Store) -> tuple[list[dict], str | None]:
     profile = store.read("profile")
     if not profile:
-        raise BookingError("Account setup is missing. Run reserve-meals setup first.")
+        raise BookingError("Account setup is missing. Run ate auth first.")
     client = Client(profile)
     try:
         client.login()
@@ -214,7 +216,7 @@ def help_screen(console: Console) -> None:
     table.add_column("Command", style="bold bright_cyan", no_wrap=True)
     table.add_column("What it does", style="white")
     for command, detail in [
-        ("ate setup", "First-run wizard for account, restaurants and schedule."),
+        ("ate auth [FILE]", "Sign in or refresh account details; .env, .md and JSON work."),
         ("ate 3", "Keep the next 3 days booked; run now and keep checking online."),
         ("ate until 10-12", "Book through October 12; year is optional."),
         ("ate show", "Live table of current and upcoming reservations."),
@@ -225,34 +227,33 @@ def help_screen(console: Console) -> None:
         ("ate pause / resume", "Pause or resume automatic booking."),
         ("ate depots", "Show available restaurants and IDs."),
         ("ate doctor", "Show setup, scheduler and recent run health."),
-        ("ate check-app FILE", "Check that an original Webetu APK/XAPK can be imported."),
     ]:
         table.add_row(command, detail)
     console.print(table)
     console.print(plain("Breakfast and dinner use the dorm. Lunch uses the main restaurant Sunday–Thursday.", "dim"))
 
 
-def setup_wizard(console: Console, store: Store) -> int:
-    from .import_app import import_signing_key
+def auth_wizard(console: Console, store: Store, credential_file: Path | None = None) -> int:
     import uuid
 
     with store.lock():
-        if store.read("profile"):
-            console.print(plain("This account is already configured. Run ate doctor or ate show.", "yellow"))
-            return 0
-        heading(console, "Welcome to Ate", "Your account stays on this Windows PC")
-        app_input = console.input("Original Webetu 2.5.0 APK/XAPK path: ").strip().strip('"')
-        app = Path(app_input).expanduser()
-        if not app.is_file() or app.suffix.lower() not in (".apk", ".xapk"):
-            raise ValueError("Choose an existing .apk or .xapk file from the original Webetu app.")
-        console.print(plain("Reading the app locally…", "dim"))
-        key, fingerprint = import_signing_key(app)
-        student = console.input("Student number: ").strip()
-        password = getpass.getpass("Password (hidden): ")
+        existing = store.read("profile") or {}
+        heading(console, "Ate account", "Sign in and choose your restaurants")
+        if credential_file is None:
+            default_student = existing.get("student")
+            label = "Student number" + (" [current]" if default_student else "") + ": "
+            student = console.input(label).strip() or default_student
+            entered_password = getpass.getpass("Password (hidden, Enter keeps current): " if existing else "Password (hidden): ")
+            password = entered_password or existing.get("password")
+            credentials = {}
+        else:
+            credentials = load_credentials(credential_file)
+            student, password = credentials["student"], credentials["password"]
         if not student or not password:
             raise ValueError("Student number and password are required.")
-        profile = {"student": student, "password": password, "signing_key": key,
-                   "app_sha256": fingerprint}
+        if existing and student != existing.get("student"):
+            raise BookingError("This data belongs to another student. Use a separate state directory for another account.")
+        profile = {"student": student, "password": password, "signing_key": SIGNING_KEY}
         client = Client(profile)
         try:
             console.print(plain("Checking your account and restaurants…", "dim"))
@@ -265,7 +266,7 @@ def setup_wizard(console: Console, store: Store) -> int:
         if not dorm_options or not main_options:
             raise BookingError("The meal service did not offer suitable restaurants to this account.")
 
-        def choose(label: str, options: list[dict]) -> int:
+        def choose(label: str, field: str, options: list[dict]) -> int:
             table = Table(title=label, box=box.ROUNDED, border_style="bright_black")
             table.add_column("ID", style="cyan", justify="right")
             table.add_column("Restaurant")
@@ -273,24 +274,48 @@ def setup_wizard(console: Console, store: Store) -> int:
                 table.add_row(str(item["id"]), plain(item.get("nameFR") or item.get("nameAR") or "?"))
             console.print(table)
             permitted = {int(item["id"]) for item in options}
+            supplied = credentials.get(field)
+            previous = existing.get(field)
+            if supplied is not None:
+                if supplied.isdecimal():
+                    if int(supplied) not in permitted:
+                        raise ValueError(f"The {field} in the file is not an available restaurant ID.")
+                    console.print(plain(f"Using {label} ID {supplied} from the file.", "dim"))
+                    return int(supplied)
+                normalized = re.sub(r"\W+", "", supplied.casefold())
+                matches = [int(item["id"]) for item in options
+                           if any(normalized == re.sub(r"\W+", "", str(item.get(name) or "").casefold())
+                                  for name in ("nameFR", "nameAR"))]
+                if len(matches) == 1:
+                    console.print(plain(f"Matched {label} to ID {matches[0]} from the file.", "dim"))
+                    return matches[0]
+                if previous in permitted:
+                    console.print(plain(f"The {field} name in the file did not match; keeping current ID {previous}.", "yellow"))
+                    return previous
+                console.print(plain(f"The {field} name in the file did not match. Choose an ID shown above.", "yellow"))
+            prompt = f"{label} ID" + (f" [{previous}]" if previous in permitted else "") + ": "
             for _ in range(3):
-                raw = console.input(f"{label} ID: ").strip()
+                raw = console.input(prompt).strip()
+                if not raw and previous in permitted:
+                    return previous
                 if raw.isdecimal() and int(raw) in permitted:
                     return int(raw)
                 console.print(plain("Choose an ID shown in the table.", "yellow"))
             raise ValueError("Restaurant selection was not completed.")
 
-        profile["dorm_id"] = choose("Dorm for breakfast and dinner", dorm_options)
-        profile["main_id"] = choose("Main restaurant for Sunday–Thursday lunch", main_options)
-        raw_days = console.input("Keep the next how many days booked? [3]: ").strip() or "3"
-        if not raw_days.isdecimal() or not 1 <= int(raw_days) <= MAX_DAYS:
-            raise ValueError("Choose a number from 1 to 366 days.")
-        order = {"kind": "days", "days": int(raw_days), "paused": False, "revision": str(uuid.uuid4())}
+        profile["dorm_id"] = choose("Dorm for breakfast and dinner", "dorm_id", dorm_options)
+        profile["main_id"] = choose("Main restaurant for Sunday–Thursday lunch", "main_id", main_options)
+        order = store.read("order")
+        if not order:
+            raw_days = credentials.get("days") or console.input("Keep the next how many days booked? [3]: ").strip() or "3"
+            if not raw_days.isdecimal() or not 1 <= int(raw_days) <= MAX_DAYS:
+                raise ValueError("Choose a number from 1 to 366 days.")
+            order = {"kind": "days", "days": int(raw_days), "paused": False, "revision": str(uuid.uuid4())}
         store.write("profile", profile)
         store.write("order", order)
         store.write("run_state", {})
-        console.print(plain("✓ Setup complete. Login details are encrypted for this Windows user.", "green"))
-        console.print(plain("The installer will start the background checker and check this order now.", "dim"))
+        console.print(plain("✓ Account ready. Login details are encrypted for this Windows user.", "green"))
+        console.print(plain("Your standing order is ready for the background checker.", "dim"))
         return 0
 
 
@@ -348,25 +373,15 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         help_screen(console)
         return 0
     command = argv[0].lower()
-    if command == "setup":
-        if len(argv) != 1:
-            raise ValueError("Use ate setup without extra arguments.")
-        return setup_wizard(console, store)
+    if command in ("auth", "setup"):
+        if len(argv) > 2:
+            raise ValueError("Use ate auth [CREDENTIAL-FILE].")
+        credential_file = Path(argv[1].strip().strip('"')).expanduser() if len(argv) == 2 else None
+        return auth_wizard(console, store, credential_file)
     if command == "background":
         if len(argv) != 1:
             raise ValueError("Background runner takes no arguments.")
         return cli.main(["--state-dir", str(store.directory), "run"])
-    if command == "check-app":
-        if len(argv) != 2:
-            raise ValueError("Use ate check-app PATH-TO-ORIGINAL-APP.")
-        from .import_app import import_signing_key
-        app = Path(argv[1].strip().strip('"')).expanduser()
-        if not app.is_file() or app.suffix.lower() not in (".apk", ".xapk"):
-            raise ValueError("Choose an existing original Webetu .apk or .xapk file.")
-        _, fingerprint = import_signing_key(app)
-        heading(console, "Original app recognized", f"SHA256 {fingerprint[:16]}…")
-        console.print(plain("This app can be used in first-run setup.", "green"))
-        return 0
     if command.isdecimal():
         if len(argv) != 1 or not 1 <= int(command) <= MAX_DAYS:
             raise ValueError("Use ate N with a number from 1 to 366.")
@@ -526,6 +541,9 @@ def main(argv: list[str] | None = None) -> int:
         # API failures are already sanitized by Client. Avoid printing raw response data.
         Console(highlight=False).print(plain(f"Error: {exc}", "bold red"))
         return 1
+    except (EOFError, KeyboardInterrupt):
+        Console(highlight=False).print(plain("Cancelled; account details were not changed.", "yellow"))
+        return 130
 
 
 if __name__ == "__main__":

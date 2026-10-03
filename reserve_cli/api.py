@@ -37,7 +37,7 @@ class Client:
     def __init__(self, profile: dict):
         self.profile = profile
         self.session = requests.Session()
-        self.session.headers["User-Agent"] = "ReserveMealsCLI/0.1"
+        self.session.headers["User-Agent"] = "AteCLI/0.5"
         self.context = None
         self.meal_token = None
 

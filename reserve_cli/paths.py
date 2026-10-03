@@ -1,11 +1,11 @@
-"""Use a stable per-user data location in a packaged executable."""
+"""Use one stable per-user data location for source and packaged commands."""
 import os
 from pathlib import Path
 import sys
 
 
 def default_state_dir() -> Path:
-    if getattr(sys, "frozen", False):
+    if os.name == "nt" or getattr(sys, "frozen", False):
         local = os.environ.get("LOCALAPPDATA")
         if not local:
             local = str(Path.home() / "AppData" / "Local")

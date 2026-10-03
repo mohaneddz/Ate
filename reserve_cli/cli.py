@@ -6,13 +6,13 @@ import sys
 import uuid
 from zoneinfo import ZoneInfo
 
-from dotenv import dotenv_values
-
 from .api import ApiError, Client
+from .auth import load_credentials
 from .booking import (BOOKING_WINDOW_DAYS, BookingError, apply_plan, make_plan,
                       meal_number, MEALS, order_dates)
 from .store import Store, StoreError
 from .paths import default_state_dir
+from .signing import SIGNING_KEY
 
 
 def now_local():
@@ -23,9 +23,8 @@ def parser():
     root = argparse.ArgumentParser(prog="reserve-meals", description="Ate: personal meal reservations.")
     root.add_argument("--state-dir", type=Path, default=default_state_dir())
     commands = root.add_subparsers(dest="command", required=True)
-    setup = commands.add_parser("setup", help="Import credentials and original app into encrypted local storage")
+    setup = commands.add_parser("setup", help="Configure an account from a local credential file")
     setup.add_argument("--credentials", type=Path, required=True)
-    setup.add_argument("--app", type=Path, required=True)
     setup.add_argument("--dorm-id", type=int, required=True)
     setup.add_argument("--main-id", type=int, required=True)
     credentials = commands.add_parser("credentials", help="Update encrypted login credentials after a password change")
@@ -65,32 +64,47 @@ def display_plan(plan, emit):
 def execute(args, store, emit):
     today = now_local().date()
     if args.command == "setup":
-        from .import_app import import_signing_key
         existing = store.read("profile")
         if existing:
-            raise BookingError("This state directory is already configured. Use a different --state-dir for another account.")
-        credentials = dotenv_values(args.credentials, encoding="utf-8-sig", interpolate=False)
-        if not credentials.get("student") or not credentials.get("password"):
-            raise BookingError("The credentials file must contain student= and password=.")
+            raise BookingError("This account is already configured. Use ate auth to refresh it.")
+        try:
+            credentials = load_credentials(args.credentials)
+        except ValueError as exc:
+            raise BookingError(str(exc)) from exc
         if args.dorm_id < 1 or args.main_id < 1:
             raise BookingError("Restaurant IDs must be positive integers.")
-        key, fingerprint = import_signing_key(args.app)
-        store.write("profile", {"student": credentials["student"], "password": credentials["password"],
-                                "dorm_id": args.dorm_id, "main_id": args.main_id,
-                                "signing_key": key, "app_sha256": fingerprint})
+        profile = {"student": credentials["student"], "password": credentials["password"],
+                   "dorm_id": args.dorm_id, "main_id": args.main_id, "signing_key": SIGNING_KEY}
+        client = Client(profile)
+        try:
+            client.login()
+            depots = client.depots()
+        finally:
+            client.close()
+        if not any(int(row["id"]) == args.dorm_id and row.get("breakfast") and row.get("dinner") for row in depots):
+            raise BookingError("The dorm ID is not available for breakfast and dinner.")
+        if not any(int(row["id"]) == args.main_id and row.get("lunch") for row in depots):
+            raise BookingError("The main restaurant ID is not available for lunch.")
+        store.write("profile", profile)
         emit("Setup complete. Credentials are encrypted for your Windows user; source files were left in place.")
         return
     profile = store.read("profile")
     if not profile:
         raise BookingError("Run setup first.")
     if args.command == "credentials":
-        credentials = dotenv_values(args.file, encoding="utf-8-sig", interpolate=False)
+        try:
+            credentials = load_credentials(args.file)
+        except ValueError as exc:
+            raise BookingError(str(exc)) from exc
         if credentials.get("student") != profile["student"]:
             raise BookingError("Use a separate --state-dir for a different account.")
-        if not credentials.get("password"):
-            raise BookingError("The file must contain a password.")
-        profile["password"] = credentials["password"]
-        store.write("profile", profile)
+        candidate = {**profile, "password": credentials["password"], "signing_key": SIGNING_KEY}
+        client = Client(candidate)
+        try:
+            client.login()
+        finally:
+            client.close()
+        store.write("profile", candidate)
         store.write("run_state", {})
         emit("Encrypted credentials updated; scheduler retries are enabled again.")
         return

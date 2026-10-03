@@ -4,13 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ate-cli"
-version = "0.4.0"
+version = "0.5.0"
 description = "Personal Webetu meal reservations from a Windows PC"
 requires-python = ">=3.11"
-dependencies = ["requests>=2.32,<3", "python-dotenv>=1,<2", "tzdata>=2025.1", "rich>=13.9,<15"]
-
-[project.optional-dependencies]
-import = ["hermes-dec==0.1.7"]
+dependencies = ["requests>=2.32,<3", "tzdata>=2025.1", "rich>=13.9,<15"]
 
 [project.scripts]
 reserve-meals = "reserve_cli.cli:main"
