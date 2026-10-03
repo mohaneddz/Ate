@@ -20,7 +20,7 @@ def now_local():
 
 
 def parser():
-    root = argparse.ArgumentParser(prog="reserve-meals", description="Couscous Cron: personal meal reservations.")
+    root = argparse.ArgumentParser(prog="reserve-meals", description="Ate: personal meal reservations.")
     root.add_argument("--state-dir", type=Path, default=default_state_dir())
     commands = root.add_subparsers(dest="command", required=True)
     setup = commands.add_parser("setup", help="Import credentials and original app into encrypted local storage")

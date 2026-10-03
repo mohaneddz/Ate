@@ -30,7 +30,7 @@ class ShortCommandTests(unittest.TestCase):
     def test_frozen_executable_uses_stable_user_state_folder(self):
         with patch.object(sys, "frozen", True, create=True), \
              patch.dict(os.environ, {"LOCALAPPDATA": self.temp.name}):
-            self.assertEqual(default_state_dir(), Path(self.temp.name) / "CouscousCron" / "state")
+            self.assertEqual(default_state_dir(), Path(self.temp.name) / "Ate" / "state")
 
     def test_yearless_date_uses_next_occurrence(self):
         self.assertEqual(parse_day("10-05", date(2026, 10, 3)), date(2026, 10, 5))

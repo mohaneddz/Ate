@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 import getpass
 import io
 import json
+import os
 from pathlib import Path
 import re
 from contextlib import redirect_stdout
@@ -208,23 +209,23 @@ def legacy(console: Console, args: list[str]) -> int:
 
 
 def help_screen(console: Console) -> None:
-    heading(console, "res  /  Couscous Cron", "Webetu meal reservations • Algeria time")
+    heading(console, "ate  /  Ate", "Webetu meal reservations • Algeria time")
     table = Table(box=box.SIMPLE, show_header=False, pad_edge=False)
     table.add_column("Command", style="bold bright_cyan", no_wrap=True)
     table.add_column("What it does", style="white")
     for command, detail in [
-        ("res setup", "First-run wizard for account, restaurants and schedule."),
-        ("res 3", "Keep the next 3 days booked; run now and keep checking online."),
-        ("res until 10-12", "Book through October 12; year is optional."),
-        ("res show", "Live table of current and upcoming reservations."),
-        ("res plan", "Preview what the standing order would book."),
-        ("res log 30", "Past 30 days of reservations and CLI activity."),
-        ("res date 10-05", "Book a specific date within the service's 3-day window."),
-        ("res sync", "Check and fulfill the current order now."),
-        ("res pause / resume", "Pause or resume automatic booking."),
-        ("res depots", "Show available restaurants and IDs."),
-        ("res doctor", "Show setup, scheduler and recent run health."),
-        ("res check-app FILE", "Check that an original Webetu APK/XAPK can be imported."),
+        ("ate setup", "First-run wizard for account, restaurants and schedule."),
+        ("ate 3", "Keep the next 3 days booked; run now and keep checking online."),
+        ("ate until 10-12", "Book through October 12; year is optional."),
+        ("ate show", "Live table of current and upcoming reservations."),
+        ("ate plan", "Preview what the standing order would book."),
+        ("ate log 30", "Past 30 days of reservations and CLI activity."),
+        ("ate date 10-05", "Book a specific date within the service's 3-day window."),
+        ("ate sync", "Check and fulfill the current order now."),
+        ("ate pause / resume", "Pause or resume automatic booking."),
+        ("ate depots", "Show available restaurants and IDs."),
+        ("ate doctor", "Show setup, scheduler and recent run health."),
+        ("ate check-app FILE", "Check that an original Webetu APK/XAPK can be imported."),
     ]:
         table.add_row(command, detail)
     console.print(table)
@@ -237,9 +238,9 @@ def setup_wizard(console: Console, store: Store) -> int:
 
     with store.lock():
         if store.read("profile"):
-            console.print(plain("This account is already configured. Run res doctor or res show.", "yellow"))
+            console.print(plain("This account is already configured. Run ate doctor or ate show.", "yellow"))
             return 0
-        heading(console, "Welcome to Couscous Cron", "Your account stays on this Windows PC")
+        heading(console, "Welcome to Ate", "Your account stays on this Windows PC")
         app_input = console.input("Original Webetu 2.5.0 APK/XAPK path: ").strip().strip('"')
         app = Path(app_input).expanduser()
         if not app.is_file() or app.suffix.lower() not in (".apk", ".xapk"):
@@ -305,7 +306,7 @@ def doctor(console: Console, store: Store) -> None:
     task = "Unknown"
     if sys.platform == "win32":
         try:
-            process = subprocess.run(["schtasks", "/Query", "/TN", "Couscous Cron", "/FO", "LIST"],
+            process = subprocess.run(["schtasks", "/Query", "/TN", "Ate", "/FO", "LIST"],
                                      capture_output=True, text=True, errors="replace", timeout=10)
             task = "Installed" if process.returncode == 0 else "Missing"
         except (OSError, subprocess.TimeoutExpired):
@@ -316,7 +317,22 @@ def doctor(console: Console, store: Store) -> None:
     table.add_row("Account", plain("Configured" if profile else "Setup needed", "green" if profile else "red"))
     table.add_row("Order", plain(order_text(order, today)))
     table.add_row("Scheduler", plain(task, "green" if task == "Installed" else "yellow"))
-    table.add_row("res on PATH", plain("Yes" if shutil.which("res") else "No", "green" if shutil.which("res") else "yellow"))
+    available = bool(shutil.which("ate"))
+    if not available and sys.platform == "win32" and getattr(sys, "frozen", False):
+        # The installer updates the user PATH, but a terminal opened before
+        # installation still has its old process environment.
+        import winreg
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                user_path = winreg.QueryValueEx(key, "Path")[0]
+            installed_bin = os.path.normcase(os.path.normpath(str(Path(sys.executable).parent)))
+            available = any(
+                os.path.normcase(os.path.normpath(os.path.expandvars(entry.strip().strip('"')))) == installed_bin
+                for entry in user_path.split(";") if entry.strip()
+            )
+        except OSError:
+            pass
+    table.add_row("ate in PATH", plain("Yes" if available else "No", "green" if available else "yellow"))
     table.add_row("Last completed", plain(run_state.get("completed", "—")))
     table.add_row("Automatic login", plain("Suspended" if run_state.get("authentication_blocked") else "Ready",
                                                  "red" if run_state.get("authentication_blocked") else "green"))
@@ -334,7 +350,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
     command = argv[0].lower()
     if command == "setup":
         if len(argv) != 1:
-            raise ValueError("Use res setup without extra arguments.")
+            raise ValueError("Use ate setup without extra arguments.")
         return setup_wizard(console, store)
     if command == "background":
         if len(argv) != 1:
@@ -342,7 +358,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return cli.main(["--state-dir", str(store.directory), "run"])
     if command == "check-app":
         if len(argv) != 2:
-            raise ValueError("Use res check-app PATH-TO-ORIGINAL-APP.")
+            raise ValueError("Use ate check-app PATH-TO-ORIGINAL-APP.")
         from .import_app import import_signing_key
         app = Path(argv[1].strip().strip('"')).expanduser()
         if not app.is_file() or app.suffix.lower() not in (".apk", ".xapk"):
@@ -353,7 +369,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return 0
     if command.isdecimal():
         if len(argv) != 1 or not 1 <= int(command) <= MAX_DAYS:
-            raise ValueError("Use res N with a number from 1 to 366.")
+            raise ValueError("Use ate N with a number from 1 to 366.")
         heading(console, f"Reserve the next {int(command)} days", "Rolling order • checking available dates now")
         result = legacy(console, ["order", "days", command])
         if result:
@@ -362,7 +378,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return legacy(console, ["run", "--force"])
     if command == "until":
         if len(argv) != 2:
-            raise ValueError("Use res until MM-DD or res until YYYY-MM-DD.")
+            raise ValueError("Use ate until MM-DD or ate until YYYY-MM-DD.")
         target = parse_day(argv[1], today)
         if not today < target <= today + timedelta(days=MAX_DAYS):
             raise ValueError("Choose a future date within the next 366 days.")
@@ -374,7 +390,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return legacy(console, ["run", "--force"])
     if command in ("show", "today"):
         if len(argv) != 1:
-            raise ValueError(f"Use res {command} without extra arguments.")
+            raise ValueError(f"Use ate {command} without extra arguments.")
         with store.lock():
             rows, cache_time = fetch_bookings(store)
             order = store.read("order")
@@ -391,7 +407,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return 0
     if command == "log":
         if len(argv) > 2 or len(argv) == 2 and not argv[1].isdecimal():
-            raise ValueError("Use res log [days], for example res log 30.")
+            raise ValueError("Use ate log [days], for example ate log 30.")
         count = int(argv[1]) if len(argv) == 2 else 30
         if not 1 <= count <= MAX_DAYS:
             raise ValueError("Log period must be from 1 to 366 days.")
@@ -414,11 +430,11 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return 0
     if command == "plan":
         if len(argv) != 1:
-            raise ValueError("Use res plan without extra arguments.")
+            raise ValueError("Use ate plan without extra arguments.")
         with store.lock():
             order = store.read("order")
             if not order:
-                raise BookingError("No standing order. Use res 3 or res until MM-DD.")
+                raise BookingError("No standing order. Use ate 3 or ate until MM-DD.")
             days, deferred = order_dates(order, today)
             profile = store.read("profile")
             client = Client(profile)
@@ -450,7 +466,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return 0
     if command == "depots":
         if len(argv) != 1:
-            raise ValueError("Use res depots without extra arguments.")
+            raise ValueError("Use ate depots without extra arguments.")
         profile = store.read("profile")
         if not profile:
             raise BookingError("Account setup is missing.")
@@ -473,13 +489,13 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return 0
     if command == "doctor":
         if len(argv) != 1:
-            raise ValueError("Use res doctor without extra arguments.")
-        heading(console, "Couscous Cron")
+            raise ValueError("Use ate doctor without extra arguments.")
+        heading(console, "Ate")
         doctor(console, store)
         return 0
     if command in ("sync", "pause", "resume"):
         if len(argv) != 1:
-            raise ValueError(f"Use res {command} without extra arguments.")
+            raise ValueError(f"Use ate {command} without extra arguments.")
         heading(console, {"sync": "Checking your order", "pause": "Pause bookings", "resume": "Resume bookings"}[command])
         result = legacy(console, ["run", "--force"] if command == "sync" else ["order", command])
         if not result and command in ("pause", "resume"):
@@ -487,7 +503,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return result
     if command in ("date", "preview"):
         if len(argv) != 2:
-            raise ValueError(f"Use res {command} MM-DD.")
+            raise ValueError(f"Use ate {command} MM-DD.")
         target = parse_day(argv[1], today)
         heading(console, f"{command.title()} {target.isoformat()}")
         arguments = ["reserve", "--date", target.isoformat()]
@@ -498,7 +514,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
             append_activity(store, f"Manual booking requested for {target.isoformat()}: " +
                             ("completed" if result == 0 else "check result"))
         return result
-    raise ValueError("Unknown command. Run res help to see available commands.")
+    raise ValueError("Unknown command. Run ate help to see available commands.")
 
 
 def main(argv: list[str] | None = None) -> int:

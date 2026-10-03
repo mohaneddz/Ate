@@ -9,5 +9,5 @@ def default_state_dir() -> Path:
         local = os.environ.get("LOCALAPPDATA")
         if not local:
             local = str(Path.home() / "AppData" / "Local")
-        return Path(local) / "CouscousCron" / "state"
+        return Path(local) / "Ate" / "state"
     return Path(__file__).resolve().parents[1] / ".reserve"
