@@ -1,4 +1,4 @@
-# Couscous Cron 🍽️
+# Ate 🍽️
 
 A small Windows CLI that reserves Webetu meals when your PC is online. Based on
 the requests recovered from the original Webetu 2.5.0 Android app and verified
@@ -13,7 +13,7 @@ how the scheduled task starts, updates, and removal.
 - Existing bookings are checked first; conflicting bookings stop the run.
 - Each submission is read back from the server before being called confirmed.
 - Passwords and imported app signing material stay in Windows DPAPI encrypted
-  files under `.reserve/` for a source install or `%LOCALAPPDATA%\CouscousCron\state`
+  files under `.reserve/` for a source install or `%LOCALAPPDATA%\Ate\state`
   for a packaged install. Runtime session tokens stay in memory.
 - Credentials, APKs, analysis output, and local logs are excluded from Git.
 
@@ -36,44 +36,46 @@ Webetu 2.5.0 and stops if it cannot identify the expected signing code.
 
 ## Use it
 
-The package installs `res.exe` into Python's Scripts directory. If that
-directory is already on your user PATH, open a **new Command Prompt** and use:
+The Windows package installs `ate.exe` under `%LOCALAPPDATA%\Ate\bin` and adds
+it to your user PATH. A source install adds the `ate` entry point to Python's
+Scripts directory. Open a **new Command Prompt** and use:
 
 ```cmd
-res 3
-res until 10-12
-res show
-res log 30
-res plan
-res doctor
+ate 3
+ate until 10-12
+ate show
+ate log 30
+ate plan
+ate doctor
 ```
 
-`res 3` saves a rolling order for the next three days and tries it immediately.
+`ate 3` saves a rolling order for the next three days and tries it immediately.
 The scheduler keeps that horizon filled whenever the PC is signed in and online.
-`res until 10-12` saves a fixed end date and tries the available dates now. For
+`ate until 10-12` saves a fixed end date and tries the available dates now. For
 short dates, the CLI chooses the next future occurrence; use `2026-10-12` for an
 explicit year. Booking is limited to tomorrow through three days ahead, so
 later dates remain in the order until their window opens.
 
-`res show` displays confirmed bookings from today onward. `res log 30` displays
+`ate show` displays confirmed bookings from today onward. `ate log 30` displays
 reservations and local CLI activity from the last 30 calendar days; substitute
 any number from 1 to 366. Both use a cached encrypted reservation snapshot if
 the service is temporarily unavailable. These other commands are also useful:
 
 ```cmd
-res today
-res preview 10-05
-res date 10-05
-res sync
-res pause
-res resume
-res depots
-res help
+ate today
+ate preview 10-05
+ate date 10-05
+ate sync
+ate pause
+ate resume
+ate depots
+ate help
 ```
 
-`res date` submits missing meals for one date, `res preview` shows the date
-without booking, and `res sync` rechecks the current standing order. Existing
+`ate date` submits missing meals for one date, `ate preview` shows the date
+without booking, and `ate sync` rechecks the current standing order. Existing
 bookings and uncertain attempts still receive the same duplicate protection.
+The old `res` command remains an alias in source installs.
 
 The underlying `reserve-meals` command remains available for setup and more
 specific account management:
@@ -111,7 +113,7 @@ and Saturday lunches are left out of the plan.
 powershell -ExecutionPolicy Bypass -File scripts/install-schedule.ps1
 ```
 
-The `Couscous Cron` task checks at sign-in and every five minutes. Windows requires
+The `Ate` task checks at sign-in and every five minutes. Windows requires
 a network connection before starting it. After a successful run it makes no more
 API calls that day unless the order changes or you run `run --force`. Missed
 checks are picked up when the PC is available again. Transient failures back off
@@ -124,9 +126,9 @@ Results and errors go to `.reserve/runs.jsonl`. The `--state-dir PATH` option
 goes before the command when using a different local data folder.
 
 ```powershell
-Get-ScheduledTaskInfo -TaskName 'Couscous Cron'
+Get-ScheduledTaskInfo -TaskName 'Ate'
 Get-Content .reserve/runs.jsonl -Tail 20
-Disable-ScheduledTask -TaskName 'Couscous Cron'
+Disable-ScheduledTask -TaskName 'Ate'
 ```
 
 ## Uncertain requests and password changes
