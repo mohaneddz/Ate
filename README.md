@@ -4,12 +4,17 @@ A small Windows CLI that reserves Webetu meals when your PC is online. Based on
 the requests recovered from the original Webetu 2.5.0 Android app and verified
 against a personal account.
 
+For a Windows install without Python, download the release ZIP, extract it and
+run `install.cmd`. The [install guide](INSTALL.md) explains first-run setup,
+how the scheduled task starts, updates, and removal.
+
 - Breakfast and dinner: your dorm, every day.
 - Lunch: your chosen main restaurant, Sunday–Thursday.
 - Existing bookings are checked first; conflicting bookings stop the run.
 - Each submission is read back from the server before being called confirmed.
 - Passwords and imported app signing material stay in Windows DPAPI encrypted
-  files under `.reserve/`. Runtime session tokens stay in memory.
+  files under `.reserve/` for a source install or `%LOCALAPPDATA%\CouscousCron\state`
+  for a packaged install. Runtime session tokens stay in memory.
 - Credentials, APKs, analysis output, and local logs are excluded from Git.
 
 ## Setup
@@ -149,3 +154,7 @@ python -m unittest discover -s tests -v
 ```
 
 Tests use fake services. They never submit live reservations.
+
+To build the standalone Windows ZIP, install the optional importer and
+PyInstaller, then run `scripts/build-release.ps1`. The package excludes local
+account data, APKs, and analysis files.
