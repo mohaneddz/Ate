@@ -66,7 +66,7 @@ def execute(args, store, emit):
     if args.command == "setup":
         existing = store.read("profile")
         if existing:
-            raise BookingError("This account is already configured. Use ate auth to refresh it.")
+            raise BookingError("This account is already configured. Use res auth to refresh it.")
         try:
             credentials = load_credentials(args.credentials)
         except ValueError as exc:
