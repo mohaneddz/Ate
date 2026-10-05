@@ -1,3 +1,5 @@
+![Ate](screenshots/cover.avif)
+
 # Ate 🍽️
 
 A small Windows CLI that reserves Webetu meals when your PC is online. Setup
