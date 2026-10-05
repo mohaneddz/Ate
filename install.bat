@@ -12,6 +12,5 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
-echo Open a new Command Prompt and type: ate show
-echo Press any key to close this window.
+echo Ate is installed. A ready-to-use terminal just opened; this window can close.
 pause >nul

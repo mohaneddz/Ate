@@ -27,7 +27,7 @@ try {
     }
     if (-not (Test-Path -LiteralPath (Join-Path $release 'ate.exe'))) { throw 'Executable is missing.' }
     Copy-Item -LiteralPath (Join-Path $release 'ate.exe') -Destination (Join-Path $package 'ate.exe') -Force
-    Copy-Item -LiteralPath 'install.cmd','uninstall.cmd','res.cmd','INSTALL.md','README.md','THIRD_PARTY_NOTICES.md' -Destination $package -Force
+    Copy-Item -LiteralPath 'install.bat','uninstall.bat','res.cmd','INSTALL.md','README.md','THIRD_PARTY_NOTICES.md' -Destination $package -Force
     New-Item -ItemType Directory -Path (Join-Path $package 'scripts') -Force | Out-Null
     foreach ($name in @('install-package.ps1','uninstall-package.ps1','hidden-run.vbs')) {
         Copy-Item -LiteralPath (Join-Path 'scripts' $name) -Destination (Join-Path (Join-Path $package 'scripts') $name) -Force

@@ -34,7 +34,7 @@ if ($existing -and -not $NoSchedule) { Stop-ScheduledTask -TaskName $taskName -E
 $exePath = Join-Path $binPath 'ate.exe'
 Copy-Item -LiteralPath $sourceExe -Destination $exePath -Force
 Copy-Item -LiteralPath (Join-Path $packagePath 'res.cmd') -Destination (Join-Path $binPath 'res.cmd') -Force
-Copy-Item -LiteralPath (Join-Path $packagePath 'uninstall.cmd') -Destination (Join-Path $binPath 'uninstall.cmd') -Force
+Copy-Item -LiteralPath (Join-Path $packagePath 'uninstall.bat') -Destination (Join-Path $binPath 'uninstall.bat') -Force
 New-Item -ItemType Directory -Path (Join-Path $binPath 'scripts') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $packagePath 'scripts\hidden-run.vbs') -Destination (Join-Path $binPath 'scripts\hidden-run.vbs') -Force
 Copy-Item -LiteralPath (Join-Path $packagePath 'scripts\uninstall-package.ps1') -Destination (Join-Path $binPath 'scripts\uninstall-package.ps1') -Force
@@ -118,4 +118,6 @@ if (-not $NoSchedule) {
     Write-Host 'Scheduler registration skipped for this test install.' -ForegroundColor Yellow
 }
 Write-Host "Installed at $installPath" -ForegroundColor Cyan
-Write-Host 'Open a new Command Prompt, then run: ate show' -ForegroundColor Cyan
+Write-Host 'The res command is on your PATH.' -ForegroundColor Green
+# Open a terminal that already sees res, so the user can keep going right away.
+Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', 'res show'

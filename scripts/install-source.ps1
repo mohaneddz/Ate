@@ -42,4 +42,7 @@ $entries = @($oldUserPath -split ';' | Where-Object { $_.Trim() })
 if (-not @($entries | Where-Object { $_.TrimEnd('\') -ieq $scriptsPath.TrimEnd('\') }).Count) {
     [Environment]::SetEnvironmentVariable('Path', ($scriptsPath + ';' + ($entries -join ';')).TrimEnd(';'), 'User')
 }
-Write-Host 'Ate is ready. Open a new Command Prompt and run ate doctor.' -ForegroundColor Green
+$env:Path = $scriptsPath + ';' + $env:Path
+Write-Host 'Ate is ready. The res command is on your PATH.' -ForegroundColor Green
+# Open a terminal that already sees res, so the user can keep going right away.
+Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', 'res show'
