@@ -4,39 +4,40 @@ The packaged release needs **Windows 10 or 11, 64-bit** and internet access.
 It does not need Python or an APK/XAPK. Keep your account details on your own PC.
 
 1. Extract the whole `Ate-0.5.0-win64.zip` archive.
-2. Double-click `install.cmd` in the extracted folder. Keep its `scripts`
+2. Double-click `install.bat` in the extracted folder. Keep its `scripts`
    subfolder beside it.
 3. Enter your student number and password. Password input is hidden. Choose a
    dorm and main restaurant from the live list, then choose the number of days
    to keep booked.
-4. The installer saves your account encrypted for your Windows user, adds
-   `ate` to your user PATH, installs the background task, and starts one check.
-5. Open a **new Command Prompt** and run `ate doctor`, then `ate show`.
+4. The installer saves your account encrypted for your Windows user, adds `res`
+   to your user PATH, installs the background task, starts one check, and opens
+   a ready terminal showing your reservations.
+5. In that terminal, try `res 3` to keep the next three days booked.
 
 ## Install directly from a clone
 
-Install Python 3.11 or newer, then run `git clone https://github.com/mohaneddz/ate.git`,
-open the `ate` folder, and double-click `install.cmd`. It installs the small
-Python package, prompts for your account and restaurants, and registers the
-same background task. The repository is private; collaborators need access.
-You can also run `python -m pip install -e .` followed by `res auth` and
+Install Python 3.11 or newer, then run `git clone https://github.com/mohaneddz/Ate.git`,
+open the `Ate` folder, and double-click `install.bat`. It installs the small
+Python package, prompts for your account and restaurants, registers the same
+background task, and opens a ready terminal. You can also run
+`python -m pip install -e .` followed by `res auth` and
 `powershell -ExecutionPolicy Bypass -File scripts/install-schedule.ps1`.
 
-If `ate` is not recognized in a new Command Prompt, sign out of Windows and
-sign back in so Explorer picks up the updated user PATH. You can also run
-`%LOCALAPPDATA%\Ate\bin\ate.exe` directly.
+If `res` is not recognized in a terminal you opened yourself, sign out of
+Windows and sign back in so Explorer picks up the updated user PATH. You can
+also run `%LOCALAPPDATA%\Ate\bin\ate.exe` directly.
 
-Use `ate 3` to maintain a rolling three days, `ate until 10-12` for an inclusive
-end date, `ate plan` to preview, and `ate log 30` for recent reservations and
-activity. `ate help` lists all commands. Breakfast and dinner use your chosen
+Use `res 3` to maintain a rolling three days, `res until 10-12` for an inclusive
+end date, `res plan` to preview, and `res log 30` for recent reservations and
+activity. `res help` lists all commands. Breakfast and dinner use your chosen
 dorm; Sunday–Thursday lunch uses your chosen main restaurant. Friday and
-Saturday have no automatic lunch.
+Saturday have no automatic lunch. (`res` and `ate` are the same command.)
 
-Run `ate auth` (or `res auth` after a source install) whenever you need to
-recheck login or change a password or restaurant. The command verifies the new
-details before saving them and keeps your existing standing order. To import a
-file instead of typing credentials, use `res auth info.env` or
-`res auth credentials.md`. JSON also works. Example file:
+Run `res auth` whenever you need to recheck login or change a password or
+restaurant. The command verifies the new details before saving them and keeps
+your existing standing order. To import a file instead of typing credentials,
+use `res auth info.env` or `res auth credentials.md`. JSON also works. Example
+file:
 
 ```text
 student=YOUR_STUDENT_NUMBER
@@ -65,15 +66,15 @@ temporary failure. A powered-off or sleeping PC cannot run the task; the next
 available check catches up within the service's three-day booking window.
 
 The task is configured to run while you are signed in, including when your
-screen is locked. `ate doctor` shows the order, scheduler, and latest result.
+screen is locked. `res doctor` shows the order, scheduler, and latest result.
 `%LOCALAPPDATA%\Ate\state\runs.jsonl` records local activity. The
 profile and reservation snapshots in `state` are encrypted with Windows DPAPI.
 
 ## Update or remove
 
-To update, extract a newer archive and run its `install.cmd`. Your encrypted
+To update, extract a newer archive and run its `install.bat`. Your encrypted
 account and standing order remain in the same user data folder. To remove the
-program, run `uninstall.cmd` from the archive or from
+program, run `uninstall.bat` from the archive or from
 `%LOCALAPPDATA%\Ate\bin`. This removes the task, `ate` executable,
 and PATH entry. It preserves the encrypted account data so reinstalling is
 easy. To remove that data too, run:
@@ -82,13 +83,9 @@ easy. To remove that data too, run:
 powershell -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\Ate\bin\scripts\uninstall-package.ps1" -PurgeData
 ```
 
-When updating from Couscous Cron 0.3.0, the installer copies its encrypted
-account, order, and local history into Ate's data folder, replaces its scheduled
-task, and removes its PATH entry. The old data folder remains as a backup.
-
 ## If setup cannot connect
 
 Setup needs the two Webetu services to authenticate and list restaurants. If
-it stops, no background task is installed. Run `install.cmd` again once the
+it stops, no background task is installed. Run `install.bat` again once the
 service is available. If the service changes its signing requirements, Ate
 will need an update.

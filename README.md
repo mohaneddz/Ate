@@ -5,11 +5,6 @@
 A small Windows CLI that reserves Webetu meals when your PC is online. Setup
 requires a student account, without an APK or XAPK.
 
-For a Windows install without Python, download the release ZIP, extract it and
-run `install.cmd`. To install from a clone, install Python 3.11+ and run
-`install.cmd` from the repository. The [install guide](INSTALL.md) covers both
-paths, authentication, automatic startup, updates, and removal.
-
 - Breakfast and dinner: your dorm, every day.
 - Lunch: your chosen main restaurant, Sunday–Thursday.
 - Existing bookings are checked first; conflicting bookings stop the run.
@@ -19,74 +14,85 @@ paths, authentication, automatic startup, updates, and removal.
   constant is included in the client. Runtime session tokens stay in memory.
 - Credentials, APKs, analysis output, and local logs are excluded from Git.
 
-## Setup
+## Quick start
 
-From a clone on Windows, under the Windows user who will run the schedule:
-
-```powershell
-git clone https://github.com/mohaneddz/ate.git
-cd ate
-.\install.cmd
-```
-
-The installer installs the Python package, runs the `res auth` flow, then registers
-the background task. `res auth` asks for your student number, hidden password,
-and dorm/main restaurants from your account's live list. Use
-`res auth info.env` or `res auth credentials.md` to import account fields from a
-file. Optional `dorm_id`, `main_id`, and `days` fields make first setup
-noninteractive. See the [install guide](INSTALL.md) for formats and examples.
-Do not commit credential files.
-
-## Use it
-
-The Windows package installs `ate.exe` under `%LOCALAPPDATA%\Ate\bin` and adds
-it to your user PATH. A source install adds the `ate` entry point to Python's
-Scripts directory. Open a **new Command Prompt** and use:
+1. Download the release ZIP, extract it, and double-click **`install.bat`**
+   (no Python needed). To install from a clone instead, install Python 3.11+
+   and run `install.bat` from the repository folder.
+2. Enter your student number and password, then pick your dorm and main
+   restaurant from your account's live list.
+3. The installer puts `res` on your PATH, registers the background checker, and
+   opens a ready terminal for you. From there:
 
 ```cmd
-ate 3
-ate until 10-12
-ate show
-ate log 30
-ate plan
-ate doctor
+res 3            :: keep the next 3 days booked, and book what is open now
+res show         :: see your current and upcoming reservations
+res help         :: list every command
 ```
 
-`ate 3` saves a rolling order for the next three days and tries it immediately.
+That is the whole setup. The background task then keeps your horizon filled
+whenever the PC is signed in and online. The [install guide](INSTALL.md) covers
+credential files, automatic startup, updates, and removal.
+
+> `res` and `ate` are the same command — use whichever you like. The underlying
+> `reserve-meals` entry point stays available for lower-level account work.
+
+## Commands
+
+Open a terminal and run:
+
+```cmd
+res 3
+res until 10-12
+res show
+res log 30
+res plan
+res doctor
+```
+
+`res 3` saves a rolling order for the next three days and tries it immediately.
 The scheduler keeps that horizon filled whenever the PC is signed in and online.
-`ate until 10-12` saves a fixed end date and tries the available dates now. For
+`res until 10-12` saves a fixed end date and tries the available dates now. For
 short dates, the CLI chooses the next future occurrence; use `2026-10-12` for an
 explicit year. Booking is limited to tomorrow through three days ahead, so
 later dates remain in the order until their window opens.
 
-`ate show` displays confirmed bookings from today onward. `ate log 30` displays
+`res show` displays confirmed bookings from today onward. `res log 30` displays
 reservations and local CLI activity from the last 30 calendar days; substitute
 any number from 1 to 366. Both use a cached encrypted reservation snapshot if
 the service is temporarily unavailable. These other commands are also useful:
 
 ```cmd
-ate today
-ate preview 10-05
-ate date 10-05
-ate sync
-ate pause
-ate resume
-ate depots
-ate help
+res today
+res preview 10-05
+res date 10-05
+res sync
+res pause
+res resume
+res depots
+res help
 ```
 
-`ate date` submits missing meals for one date, `ate preview` shows the date
-without booking, and `ate sync` rechecks the current standing order. Existing
+`res date` submits missing meals for one date, `res preview` shows the date
+without booking, and `res sync` rechecks the current standing order. Existing
 bookings and uncertain attempts still receive the same duplicate protection.
-The old `res` command remains an alias in source and packaged installs.
 
-After a password change or login problem, run `ate auth` to validate and save
+After a password change or login problem, run `res auth` to validate and save
 new details. It keeps your standing order and clears the automatic login block
 only after a successful login. A bad password or unavailable service leaves
-the previous account data in place.
+the previous account data in place. Use `res auth info.env` or
+`res auth credentials.md` to import account fields from a file instead of
+typing them; see the [install guide](INSTALL.md) for formats. Do not commit
+credential files.
 
-The underlying `reserve-meals` command remains available for setup and more
-specific account management:
+The Windows package installs `ate.exe` under `%LOCALAPPDATA%\Ate\bin` and adds
+that folder to your user PATH. A source install adds the `res`/`ate` entry
+points to Python's Scripts directory.
+
+## Lower-level account management
+
+The `reserve-meals` command (also `python -m reserve_cli`) exposes the raw
+operations behind the friendly commands:
 
 ```powershell
 # Read available restaurants and current reservations.
@@ -116,6 +122,9 @@ The runner starts with tomorrow and uses the `Africa/Algiers` calendar. Friday
 and Saturday lunches are left out of the plan.
 
 ## Run whenever the PC is online
+
+`install.bat` registers the background task for you. To (re)install it on its
+own:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/install-schedule.ps1
@@ -156,6 +165,13 @@ clears authentication suspension. MFA login is not implemented. API changes may
 require updating the client. This CLI does not cancel or replace existing meals.
 Avoid submitting the same meal simultaneously from the phone; the client cannot
 make a check and a write atomic across two devices.
+
+## Uninstall
+
+Run `uninstall.bat` from the release archive or from `%LOCALAPPDATA%\Ate\bin`.
+It removes the task, the executable, and the PATH entry while preserving your
+encrypted account data. To remove that data too, see the
+[install guide](INSTALL.md).
 
 ## Tests
 

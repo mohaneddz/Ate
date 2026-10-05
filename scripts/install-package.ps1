@@ -73,7 +73,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
     if ($LASTEXITCODE -ne 0) { throw 'Account setup did not finish. No scheduler was installed.' }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'order.bin'))) {
-    throw 'No standing order is configured. Run ate auth or set an order first.'
+    throw 'No standing order is configured. Run res auth or set an order first.'
 }
 
 $oldUserPath = [Environment]::GetEnvironmentVariable('Path','User')

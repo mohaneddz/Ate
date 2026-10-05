@@ -30,7 +30,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
     if ($LASTEXITCODE -ne 0) { throw 'Account setup did not finish. No scheduler was installed.' }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'order.bin'))) {
-    throw 'No standing order is configured. Run ate auth or ate 3 first.'
+    throw 'No standing order is configured. Run res auth or res 3 first.'
 }
 & (Join-Path $PSScriptRoot 'install-schedule.ps1') -ProjectRoot $rootPath -Python $python
 $scriptsPath = (& $python -c "import sysconfig; print(sysconfig.get_path('scripts'))").Trim()
