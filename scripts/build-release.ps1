@@ -16,6 +16,7 @@ Push-Location $root
 try {
     if (-not $SkipExecutable) {
         python scripts\pyinstaller_driver.py --noconfirm --clean --onefile --name ate --paths $root `
+            --icon (Join-Path $root 'assets\ate.ico') `
             --exclude-module IPython --exclude-module matplotlib --exclude-module numpy `
             --exclude-module PyQt5 --exclude-module PyQt6 --exclude-module PySide2 --exclude-module PySide6 `
             --exclude-module scipy --exclude-module pandas --exclude-module notebook --exclude-module nbformat `
