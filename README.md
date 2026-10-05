@@ -1,9 +1,6 @@
 ![Ate](screenshots/cover.avif)
 
-<h1 style="display: flex; align-items: center; gap: 12px; font-size: 48px; line-height: 56px; border-bottom: 3px solid #06b6d4; padding-bottom: 8px;">
-  <img src="screenshots/icon.webp" alt="Ate icon" style="height: 56px; width: 56px; object-fit: cover; border-radius: 14px;">
-  <span>Ate 🍽️</span>
-</h1>
+# <img src="screenshots/icon.webp" alt="Ate icon" width="42" height="42" align="top"> &nbsp;Ate
 
 A small Windows CLI that reserves Webetu meals when your PC is online. Setup
 requires a student account, without an APK or XAPK.
