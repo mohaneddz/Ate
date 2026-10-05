@@ -17,15 +17,20 @@ requires a student account, without an APK or XAPK.
   constant is included in the client. Runtime session tokens stay in memory.
 - Credentials, APKs, analysis output, and local logs are excluded from Git.
 
-## Quick start
+## Install
 
-1. Download the release ZIP, extract it, and double-click **`install.bat`**
-   (no Python needed). To install from a clone instead, install Python 3.11+
-   and run `install.bat` from the repository folder.
-2. Enter your student number and password, then pick your dorm and main
-   restaurant from your account's live list.
-3. The installer puts `res` on your PATH, registers the background checker, and
-   opens a ready terminal for you. From there:
+Needs **Windows 10 or 11, 64-bit** and internet access.
+
+1. Download the release ZIP, extract the whole folder (keep the `scripts`
+   subfolder beside `install.bat`), and double-click **`install.bat`** — no
+   Python needed. To install from a clone instead, install Python 3.11+ and run
+   `install.bat` from the repository folder.
+2. Enter your student number and password (input is hidden), then pick your dorm
+   and main restaurant from your account's live list and how many days to keep
+   booked.
+3. The installer saves your account encrypted for your Windows user, puts `res`
+   on your PATH, registers the background checker, and opens a ready terminal.
+   From there:
 
 ```cmd
 res 3            :: keep the next 3 days booked, and book what is open now
@@ -34,8 +39,13 @@ res help         :: list every command
 ```
 
 That is the whole setup. The background task then keeps your horizon filled
-whenever the PC is signed in and online. The [install guide](INSTALL.md) covers
-credential files, automatic startup, updates, and removal.
+whenever the PC is signed in and online.
+
+If you open your own terminal and `res` is not recognized yet, sign out of
+Windows and back in so Explorer picks up the updated PATH — or run
+`%LOCALAPPDATA%\Ate\bin\ate.exe` directly. Setup needs the Webetu services to be
+reachable; if it cannot connect, no background task is installed, so just run
+`install.bat` again once the service is back.
 
 > `res` and `ate` are the same command — use whichever you like. The underlying
 > `reserve-meals` entry point stays available for lower-level account work.
@@ -83,14 +93,28 @@ bookings and uncertain attempts still receive the same duplicate protection.
 After a password change or login problem, run `res auth` to validate and save
 new details. It keeps your standing order and clears the automatic login block
 only after a successful login. A bad password or unavailable service leaves
-the previous account data in place. Use `res auth info.env` or
-`res auth credentials.md` to import account fields from a file instead of
-typing them; see the [install guide](INSTALL.md) for formats. Do not commit
-credential files.
+the previous account data in place.
+
+To skip typing, import account fields from a file with `res auth info.env` or
+`res auth credentials.md` (JSON also works):
+
+```text
+student=YOUR_STUDENT_NUMBER
+password=YOUR_PASSWORD
+dorm_id=YOUR_DORM_ID
+main_id=YOUR_MAIN_RESTAURANT_ID
+days=3
+```
+
+The restaurant IDs and `days` are optional; without IDs the command lists your
+available restaurants and asks you to choose, and `days` is used only when no
+standing order exists. A Markdown file may use `student: ...` / `password: ...`
+lines or a two-column table. **Do not commit credential files** — `*.env` and
+`credentials*` are already gitignored.
 
 The Windows package installs `ate.exe` under `%LOCALAPPDATA%\Ate\bin` and adds
 that folder to your user PATH. A source install adds the `res`/`ate` entry
-points to Python's Scripts directory.
+points to Python's Scripts directory. Both share `%LOCALAPPDATA%\Ate\state`.
 
 ## Lower-level account management
 
@@ -173,8 +197,14 @@ make a check and a write atomic across two devices.
 
 Run `uninstall.bat` from the release archive or from `%LOCALAPPDATA%\Ate\bin`.
 It removes the task, the executable, and the PATH entry while preserving your
-encrypted account data. To remove that data too, see the
-[install guide](INSTALL.md).
+encrypted account data. To remove that data too:
+
+```cmd
+powershell -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\Ate\bin\scripts\uninstall-package.ps1" -PurgeData
+```
+
+To update, extract a newer archive and run its `install.bat`; your encrypted
+account and standing order stay in the same user data folder.
 
 ## Tests
 
