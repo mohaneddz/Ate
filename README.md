@@ -1,3 +1,5 @@
+![Ate](screenshots/cover.avif)
+
 # Ate
 
 Ate keeps your Webetu meals booked while your PC is signed in and online.
