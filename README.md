@@ -20,8 +20,9 @@ Needs **Windows 10 or 11, 64-bit** and internet access.
 
 1. Download the release ZIP, extract the whole folder (keep the `scripts`
    subfolder beside `install.bat`), and double-click **`install.bat`** — no
-   Python needed. To install from a clone instead, install Python 3.11+ and run
-   `install.bat` from the repository folder.
+   Python needed. Windows asks for administrator access to copy the app into
+   `%ProgramFiles%\Ate\bin`. To install from a clone instead, install Python
+   3.11+ and run `install.bat` from the repository folder.
 2. Enter your student number and password (input is hidden), then pick your dorm
    and main restaurant from your account's live list and how many days to keep
    booked.
@@ -40,7 +41,7 @@ whenever the PC is signed in and online.
 
 If you open your own terminal and `res` is not recognized yet, sign out of
 Windows and back in so Explorer picks up the updated PATH — or run
-`%LOCALAPPDATA%\Ate\bin\ate.exe` directly. Setup needs the Webetu services to be
+`%ProgramFiles%\Ate\bin\ate.exe` directly. Setup needs the Webetu services to be
 reachable; if it cannot connect, no background task is installed, so just run
 `install.bat` again once the service is back.
 
@@ -121,9 +122,11 @@ standing order exists. A Markdown file may use `student: ...` / `password: ...`
 lines or a two-column table. **Do not commit credential files** — `*.env` and
 `credentials*` are already gitignored.
 
-The Windows package installs `ate.exe` under `%LOCALAPPDATA%\Ate\bin` and adds
+The Windows package installs `ate.exe` under `%ProgramFiles%\Ate\bin` and adds
 that folder to your user PATH. A source install adds the `res`/`ate` entry
 points to Python's Scripts directory. Both share `%LOCALAPPDATA%\Ate\state`.
+Installing a new release replaces an older `%LOCALAPPDATA%\Ate\bin` installation
+and keeps its encrypted account data in the same user state folder.
 
 ## Lower-level account management
 
@@ -204,12 +207,12 @@ make a check and a write atomic across two devices.
 
 ## Uninstall
 
-Run `uninstall.bat` from the release archive or from `%LOCALAPPDATA%\Ate\bin`.
+Run `uninstall.bat` from the release archive or from `%ProgramFiles%\Ate\bin`.
 It removes the task, the executable, and the PATH entry while preserving your
 encrypted account data. To remove that data too:
 
 ```cmd
-powershell -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\Ate\bin\scripts\uninstall-package.ps1" -PurgeData
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ProgramFiles%\Ate\bin\scripts\uninstall-package.ps1" -PurgeData
 ```
 
 To update, extract a newer archive and run its `install.bat`; your encrypted
