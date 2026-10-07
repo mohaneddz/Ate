@@ -30,7 +30,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $release 'ate.exe') -Destination (Join-Path $package 'ate.exe') -Force
     Copy-Item -LiteralPath 'install.bat','uninstall.bat','res.cmd','README.md' -Destination $package -Force
     New-Item -ItemType Directory -Path (Join-Path $package 'scripts') -Force | Out-Null
-    foreach ($name in @('install-package.ps1','uninstall-package.ps1','hidden-run.vbs')) {
+    foreach ($name in @('install-package.ps1','uninstall-package.ps1','manage-program-files.ps1','hidden-run.vbs')) {
         Copy-Item -LiteralPath (Join-Path 'scripts' $name) -Destination (Join-Path (Join-Path $package 'scripts') $name) -Force
     }
     $zip = Join-Path $release "Ate-$Version-win64.zip"

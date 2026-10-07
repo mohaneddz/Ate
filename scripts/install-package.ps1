@@ -9,20 +9,22 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $PackageRoot) { $PackageRoot = Split-Path -Parent $PSScriptRoot }
 $defaultInstall = -not $InstallRoot
-if ($defaultInstall) { $InstallRoot = Join-Path $env:LOCALAPPDATA 'Ate' }
+if ($defaultInstall) { $InstallRoot = Join-Path $env:ProgramFiles 'Ate' }
 $packagePath = (Resolve-Path -LiteralPath $PackageRoot).Path
 $installPath = [System.IO.Path]::GetFullPath($InstallRoot)
+$oldInstall = Join-Path $env:LOCALAPPDATA 'Ate'
+$oldBin = Join-Path $oldInstall 'bin'
 $legacyPath = Join-Path $env:LOCALAPPDATA 'CouscousCron'
 $legacyBin = Join-Path $legacyPath 'bin'
 $legacyState = Join-Path $legacyPath 'state'
 $binPath = Join-Path $installPath 'bin'
-$statePath = Join-Path $installPath 'state'
+$statePath = if ($defaultInstall) { Join-Path $oldInstall 'state' } else { Join-Path $installPath 'state' }
 $sourceExe = Join-Path $packagePath 'ate.exe'
 if (-not (Test-Path -LiteralPath $sourceExe -PathType Leaf)) { throw 'ate.exe is missing from this package.' }
 if (-not (Test-Path -LiteralPath (Join-Path $packagePath 'scripts\hidden-run.vbs') -PathType Leaf)) {
     throw 'The background runner is missing from this package.'
 }
-New-Item -ItemType Directory -Path $binPath,$statePath -Force | Out-Null
+New-Item -ItemType Directory -Path $statePath -Force | Out-Null
 
 $taskName = 'Ate'
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -32,12 +34,20 @@ if ($existing -and $existing.Description -notlike 'Ate:*') {
 if ($existing -and -not $NoSchedule) { Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue }
 
 $exePath = Join-Path $binPath 'ate.exe'
-Copy-Item -LiteralPath $sourceExe -Destination $exePath -Force
-Copy-Item -LiteralPath (Join-Path $packagePath 'res.cmd') -Destination (Join-Path $binPath 'res.cmd') -Force
-Copy-Item -LiteralPath (Join-Path $packagePath 'uninstall.bat') -Destination (Join-Path $binPath 'uninstall.bat') -Force
-New-Item -ItemType Directory -Path (Join-Path $binPath 'scripts') -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $packagePath 'scripts\hidden-run.vbs') -Destination (Join-Path $binPath 'scripts\hidden-run.vbs') -Force
-Copy-Item -LiteralPath (Join-Path $packagePath 'scripts\uninstall-package.ps1') -Destination (Join-Path $binPath 'scripts\uninstall-package.ps1') -Force
+if ($defaultInstall) {
+    $helper = Join-Path $packagePath 'scripts\manage-program-files.ps1'
+    if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'The Program Files installer helper is missing.' }
+    $arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -PackageRoot "{1}"' -f $helper, $packagePath
+    $process = Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden -ArgumentList $arguments -Wait -PassThru
+    if ($process.ExitCode -ne 0) { throw "Program Files installation failed (exit code $($process.ExitCode))." }
+} else {
+    New-Item -ItemType Directory -Path $binPath,(Join-Path $binPath 'scripts') -Force | Out-Null
+    Copy-Item -LiteralPath $sourceExe -Destination $exePath -Force
+    Copy-Item -LiteralPath (Join-Path $packagePath 'res.cmd') -Destination (Join-Path $binPath 'res.cmd') -Force
+    Copy-Item -LiteralPath (Join-Path $packagePath 'uninstall.bat') -Destination (Join-Path $binPath 'uninstall.bat') -Force
+    Copy-Item -LiteralPath (Join-Path $packagePath 'scripts\hidden-run.vbs') -Destination (Join-Path $binPath 'scripts\hidden-run.vbs') -Force
+    Copy-Item -LiteralPath (Join-Path $packagePath 'scripts\uninstall-package.ps1') -Destination (Join-Path $binPath 'scripts\uninstall-package.ps1') -Force
+}
 
 if ($MigrateFrom) {
     $oldPath = (Resolve-Path -LiteralPath $MigrateFrom).Path
@@ -80,7 +90,9 @@ $oldUserPath = [Environment]::GetEnvironmentVariable('Path','User')
 $entries = @($oldUserPath -split ';' | Where-Object { $_.Trim() })
 $entries = @($entries | Where-Object { $_.TrimEnd('\') -ine $binPath.TrimEnd('\') })
 if ($defaultInstall) {
-    $entries = @($entries | Where-Object { $_.TrimEnd('\') -ine $legacyBin.TrimEnd('\') })
+    $entries = @($entries | Where-Object {
+        $_.TrimEnd('\') -ine $legacyBin.TrimEnd('\') -and $_.TrimEnd('\') -ine $oldBin.TrimEnd('\')
+    })
 }
 [Environment]::SetEnvironmentVariable('Path', (($binPath) + ';' + ($entries -join ';')).TrimEnd(';'), 'User')
 $env:Path = $binPath + ';' + $env:Path
@@ -116,6 +128,16 @@ if (-not $NoSchedule) {
     Start-ScheduledTask -TaskName $taskName
 } else {
     Write-Host 'Scheduler registration skipped for this test install.' -ForegroundColor Yellow
+}
+if ($defaultInstall -and -not $NoSchedule -and (Test-Path -LiteralPath (Join-Path $oldBin 'ate.exe') -PathType Leaf) -and
+    (Test-Path -LiteralPath (Join-Path $oldBin 'scripts\uninstall-package.ps1') -PathType Leaf)) {
+    $oldBinPath = [System.IO.Path]::GetFullPath($oldBin).TrimEnd('\')
+    $oldRootPath = [System.IO.Path]::GetFullPath($oldInstall).TrimEnd('\')
+    if (-not $oldBinPath.StartsWith($oldRootPath + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Old executable path is outside the previous Ate folder.'
+    }
+    Remove-Item -LiteralPath $oldBinPath -Recurse -Force
+    Write-Host 'Previous per-user executable removed.' -ForegroundColor Green
 }
 Write-Host "Installed at $installPath" -ForegroundColor Cyan
 Write-Host 'The res command is on your PATH.' -ForegroundColor Green
