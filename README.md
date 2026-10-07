@@ -62,6 +62,15 @@ On Windows, if `res` is not found in a newly opened terminal, sign out and back
 in to refresh PATH. You can also run `%ProgramFiles%\Ate\bin\ate.exe` directly.
 On Linux, add `~/.local/bin` to PATH if needed.
 
+## Screenshots
+
+| | |
+| --- | --- |
+| ![res show](screenshots/show.avif) | ![res log](screenshots/log.avif) |
+| `res show` — current and upcoming reservations | `res log` — reservations and activity |
+| ![res auth](screenshots/auth.avif) | ![res help](screenshots/help.avif) |
+| `res auth` — update account details | `res help` — every command |
+
 ## Update or uninstall
 
 On Windows, extract a newer ZIP and run its `install.bat` to update. To
