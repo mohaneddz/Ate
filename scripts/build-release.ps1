@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Version = '0.5.0', [switch]$SkipExecutable)
+param([string]$Version = '0.6.0', [switch]$SkipExecutable)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $release = Join-Path $root 'release'
