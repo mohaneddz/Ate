@@ -44,6 +44,18 @@ Windows and back in so Explorer picks up the updated PATH — or run
 reachable; if it cannot connect, no background task is installed, so just run
 `install.bat` again once the service is back.
 
+If `res` raises `ModuleNotFoundError: No module named 'reserve_cli'`, an older
+editable Python installation may still point to a checkout that was moved or
+deleted. From the current repository folder, repair the command with:
+
+```cmd
+python -m pip uninstall reserve-meals-cli
+python -m pip install .
+```
+
+Current source installs copy the package into Python so moving the checkout
+does not break the command.
+
 > `res` and `ate` are the same command — use whichever you like. The underlying
 > `reserve-meals` entry point stays available for lower-level account work.
 
