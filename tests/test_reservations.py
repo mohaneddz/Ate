@@ -196,6 +196,25 @@ class SchedulerTests(unittest.TestCase):
 
 
 class StorageTests(unittest.TestCase):
+    def test_interrupted_account_commit_recovers_on_next_read(self):
+        import base64
+        import json
+        with tempfile.TemporaryDirectory() as temporary:
+            store = Store(Path(temporary))
+            original = {"student": "original", "password": "previous"}
+            store.write("profile", original)
+            old_bytes = (store.directory / "profile.bin").read_bytes()
+            # This is the on-disk state left by a process killed after its first write.
+            snapshot = {"profile": base64.b64encode(old_bytes).decode("ascii"), "order": None}
+            from reserve_cli.store import _protect
+            store._replace_bytes("auth-transaction", _protect(json.dumps(snapshot).encode()))
+            store.write("profile", {"student": "partial", "password": "new"})
+            store.write("order", {"kind": "days", "days": 7})
+            restarted = Store(Path(temporary))
+            self.assertEqual(restarted.read("profile"), original)
+            self.assertIsNone(restarted.read("order"))
+            self.assertFalse((store.directory / "auth-transaction.bin").exists())
+
     def test_account_store_roundtrip_and_permissions(self):
         with tempfile.TemporaryDirectory() as temporary:
             store = Store(Path(temporary))

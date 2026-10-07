@@ -1,5 +1,6 @@
 """Keep local account state private to the current user."""
 from contextlib import contextmanager
+import base64
 import ctypes
 from ctypes import wintypes
 import json
@@ -51,6 +52,9 @@ class Store:
                 log.chmod(0o600)
 
     def read(self, name: str, default=None):
+        if (self.directory / "auth-transaction.bin").exists() and not getattr(self, "_locked", False):
+            with self.lock():
+                pass
         path = self.directory / f"{name}.bin"
         if not path.exists():
             return default
@@ -71,27 +75,62 @@ class Store:
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, self.directory / f"{name}.bin")
+            self._sync_directory()
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
     @contextmanager
     def transaction(self, *names: str):
-        """Restore the previous files if an operation is interrupted."""
+        """Restore prior files after interruption, including the next process after a crash."""
+        if not getattr(self, "_locked", False):
+            raise StoreError("A transaction requires the account lock.")
+        if (self.directory / "auth-transaction.bin").exists():
+            raise StoreError("An earlier account change needs recovery.")
         previous = {}
         for name in names:
+            if name not in ("profile", "order", "run_state"):
+                raise StoreError("Unsupported account transaction file.")
             path = self.directory / f"{name}.bin"
             previous[name] = path.read_bytes() if path.exists() else None
+        snapshot = {name: base64.b64encode(data).decode("ascii") if data is not None else None
+                    for name, data in previous.items()}
+        self._replace_bytes("auth-transaction", _protect(json.dumps(snapshot).encode("utf-8")))
         try:
             yield
         except BaseException:
-            for name, data in previous.items():
+            self._recover_transaction()
+            raise
+        else:
+            (self.directory / "auth-transaction.bin").unlink()
+            self._sync_directory()
+
+    def _sync_directory(self):
+        if os.name == "posix":
+            fd = os.open(self.directory, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+
+    def _recover_transaction(self):
+        journal = self.directory / "auth-transaction.bin"
+        if not journal.exists():
+            return
+        try:
+            snapshot = json.loads(_protect(journal.read_bytes(), decrypt=True))
+            if not isinstance(snapshot, dict) or not set(snapshot).issubset({"profile", "order", "run_state"}):
+                raise ValueError("Invalid account journal")
+            for name, encoded in snapshot.items():
                 path = self.directory / f"{name}.bin"
-                if data is None:
+                if encoded is None:
                     path.unlink(missing_ok=True)
                 else:
-                    self._replace_bytes(name, data)
-            raise
+                    self._replace_bytes(name, base64.b64decode(encoded, validate=True))
+            journal.unlink()
+            self._sync_directory()
+        except (ValueError, OSError, TypeError) as exc:
+            raise StoreError("The interrupted account change could not be recovered.") from exc
 
     def append_log(self, line: str):
         fd = os.open(self.directory / "runs.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -113,8 +152,11 @@ class Store:
                 except OSError as exc:
                     raise StoreError("Another reservation command is running.") from exc
                 try:
+                    self._locked = True
+                    self._recover_transaction()
                     yield
                 finally:
+                    self._locked = False
                     stream.seek(0)
                     msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
             elif sys.platform.startswith("linux"):
@@ -126,8 +168,11 @@ class Store:
                 except OSError as exc:
                     raise StoreError("Another reservation command is running.") from exc
                 try:
+                    self._locked = True
+                    self._recover_transaction()
                     yield
                 finally:
+                    self._locked = False
                     fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
             else:
                 raise StoreError("This version supports Windows and Linux only.")
