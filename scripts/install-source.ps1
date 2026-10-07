@@ -8,7 +8,8 @@ if ($existing -and $existing.Actions.WorkingDirectory -ne $rootPath) {
     throw 'Ate already has a background task from another installation. Remove that installation first.'
 }
 $python = (Get-Command python.exe -ErrorAction Stop).Source
-& $python -m pip install -e $rootPath
+# Install a copy into Python so the command keeps working if this checkout moves.
+& $python -m pip install $rootPath
 if ($LASTEXITCODE -ne 0) { throw 'Python package installation failed.' }
 $statePath = Join-Path $env:LOCALAPPDATA 'Ate\state'
 $oldState = Join-Path $rootPath '.reserve'
