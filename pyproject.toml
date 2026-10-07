@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ate-cli"
-version = "0.6.0"
-description = "Personal Webetu meal reservations from a Windows PC"
+version = "0.7.0"
+description = "Personal Webetu meal reservations from a Windows or Linux PC"
 requires-python = ">=3.11"
 dependencies = ["requests>=2.32,<3", "tzdata>=2025.1", "rich>=13.9,<15"]
 
