@@ -86,7 +86,9 @@ def execute(args, store, emit):
         if not any(int(row["id"]) == args.main_id and row.get("lunch") for row in depots):
             raise BookingError("The main restaurant ID is not available for lunch.")
         store.write("profile", profile)
-        emit("Setup complete. Credentials are encrypted for your Windows user; source files were left in place.")
+        protection = ("encrypted for your Windows user" if sys.platform == "win32"
+                      else "stored in files only your Linux user can read")
+        emit(f"Setup complete. Credentials are {protection}; source files were left in place.")
         return
     profile = store.read("profile")
     if not profile:
@@ -202,8 +204,7 @@ def main(argv=None):
     def emit(message):
         print(message)
         if args.command == "run":
-            with (store.directory / "runs.jsonl").open("a", encoding="utf-8") as log:
-                log.write(json.dumps({"at": now_local().isoformat(), "message": message}, ensure_ascii=False) + "\n")
+            store.append_log(json.dumps({"at": now_local().isoformat(), "message": message}, ensure_ascii=False))
     try:
         with store.lock():
             try:

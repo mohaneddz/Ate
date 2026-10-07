@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ import requests
 from reserve_cli.api import ApiError, Client, compact_json, signed_headers
 from reserve_cli.booking import (BookingError, apply_plan, make_plan, order_dates)
 from reserve_cli.cli import execute, parser
-from reserve_cli.store import Store
+from reserve_cli.store import Store, StoreError
 
 MONDAY = date(2026, 10, 5)
 PROFILE = {"dorm_id": 10, "main_id": 20, "signing_key": "test-only-key"}
@@ -195,14 +196,34 @@ class SchedulerTests(unittest.TestCase):
 
 
 class StorageTests(unittest.TestCase):
-    def test_dpapi_roundtrip_does_not_store_plaintext(self):
+    def test_account_store_roundtrip_and_permissions(self):
         with tempfile.TemporaryDirectory() as temporary:
             store = Store(Path(temporary))
             value = {"password": "not-a-real-secret"}
             with store.lock():
                 store.write("test", value)
-            self.assertNotIn(b"not-a-real-secret", (Path(temporary) / "test.bin").read_bytes())
+            if os.name == "nt":
+                self.assertNotIn(b"not-a-real-secret", (Path(temporary) / "test.bin").read_bytes())
+            else:
+                self.assertEqual((Path(temporary) / "test.bin").stat().st_mode & 0o777, 0o600)
+                self.assertEqual(Path(temporary).stat().st_mode & 0o777, 0o700)
             self.assertEqual(store.read("test"), value)
+            store.append_log('test event')
+            if os.name == "posix":
+                self.assertEqual((Path(temporary) / "runs.jsonl").stat().st_mode & 0o777, 0o600)
+
+    def test_linux_lock_excludes_another_command(self):
+        if os.name != "posix":
+            self.skipTest("Linux file locking")
+        with tempfile.TemporaryDirectory() as temporary:
+            first = Store(Path(temporary))
+            second = Store(Path(temporary))
+            with first.lock():
+                with self.assertRaisesRegex(StoreError, "Another reservation command"):
+                    with second.lock():
+                        pass
+            with second.lock():
+                pass
 
 
 if __name__ == "__main__":

@@ -5,9 +5,13 @@ import sys
 
 
 def default_state_dir() -> Path:
-    if os.name == "nt" or getattr(sys, "frozen", False):
+    if os.name == "nt":
         local = os.environ.get("LOCALAPPDATA")
         if not local:
             local = str(Path.home() / "AppData" / "Local")
         return Path(local) / "Ate" / "state"
-    return Path(__file__).resolve().parents[1] / ".reserve"
+    if sys.platform.startswith("linux"):
+        state_home = os.environ.get("XDG_STATE_HOME", "")
+        root = Path(state_home) if state_home and Path(state_home).is_absolute() else Path.home() / ".local" / "state"
+        return root / "ate"
+    raise RuntimeError("Ate supports Windows and Linux only.")

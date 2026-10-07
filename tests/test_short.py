@@ -30,14 +30,24 @@ class ShortCommandTests(unittest.TestCase):
         self.console = Console(file=self.output, width=100, force_terminal=True, color_system="truecolor")
 
     def test_frozen_executable_uses_stable_user_state_folder(self):
+        if os.name != "nt":
+            self.skipTest("Windows path")
         with patch.object(sys, "frozen", True, create=True), \
              patch.dict(os.environ, {"LOCALAPPDATA": self.temp.name}):
             self.assertEqual(default_state_dir(), Path(self.temp.name) / "Ate" / "state")
 
     def test_source_command_uses_same_windows_state_folder(self):
+        if os.name != "nt":
+            self.skipTest("Windows path")
         with patch.object(sys, "frozen", False, create=True), \
              patch.dict(os.environ, {"LOCALAPPDATA": self.temp.name}):
             self.assertEqual(default_state_dir(), Path(self.temp.name) / "Ate" / "state")
+
+    def test_linux_state_uses_xdg_state_home(self):
+        if os.name != "posix":
+            self.skipTest("Linux path")
+        with patch.dict(os.environ, {"XDG_STATE_HOME": self.temp.name}):
+            self.assertEqual(default_state_dir(), Path(self.temp.name) / "ate")
 
     def test_yearless_date_uses_next_occurrence(self):
         self.assertEqual(parse_day("10-05", date(2026, 10, 3)), date(2026, 10, 5))
@@ -104,7 +114,7 @@ class ShortCommandTests(unittest.TestCase):
         self.assertEqual(result, rows)
         self.assertEqual(cached, "2026-10-03T18:00:00+01:00")
 
-    def test_auth_wizard_saves_only_encrypted_account_data(self):
+    def test_auth_wizard_saves_private_account_data(self):
         replies = iter(["test-student", "10", "20", "3"])
         self.console.input = lambda _: next(replies)
         depots = [
@@ -119,7 +129,11 @@ class ShortCommandTests(unittest.TestCase):
         self.assertEqual((profile["dorm_id"], profile["main_id"]), (10, 20))
         self.assertEqual(profile["signing_key"], SIGNING_KEY)
         self.assertEqual(self.store.read("order")["days"], 3)
-        self.assertNotIn(b"private-test-password", (self.store.directory / "profile.bin").read_bytes())
+        profile_file = self.store.directory / "profile.bin"
+        if os.name == "nt":
+            self.assertNotIn(b"private-test-password", profile_file.read_bytes())
+        else:
+            self.assertEqual(profile_file.stat().st_mode & 0o777, 0o600)
         self.assertNotIn("private-test-password", self.output.getvalue())
 
     def test_auth_file_imports_markdown_values_without_prompting_for_ids(self):
@@ -154,6 +168,59 @@ class ShortCommandTests(unittest.TestCase):
             self.assertEqual(auth_wizard(self.console, self.store, path), 0)
         self.assertEqual(self.store.read("profile")["password"], "new-password")
         self.assertEqual(self.store.read("order"), order)
+
+    def test_ctrl_c_during_auth_commit_restores_previous_account(self):
+        profile = {"student": "test-student", "password": "old-password",
+                   "dorm_id": 10, "main_id": 20, "signing_key": SIGNING_KEY}
+        order = {"kind": "days", "days": 30, "paused": False, "revision": "existing"}
+        state = {"authentication_blocked": True}
+        for name, value in (("profile", profile), ("order", order), ("run_state", state)):
+            self.store.write(name, value)
+        before = {name: (self.store.directory / f"{name}.bin").read_bytes()
+                  for name in ("profile", "order", "run_state")}
+        path = Path(self.temp.name) / "new.env"
+        path.write_text("student=test-student\npassword=new-password\ndorm_id=10\nmain_id=20\n",
+                        encoding="utf-8")
+        depots = [{"id": 10, "nameFR": "Dorm", "breakfast": True, "dinner": True},
+                  {"id": 20, "nameFR": "Main", "lunch": True}]
+        original_write = self.store.write
+        for interrupted_write in (1, 2, 3):
+            with self.subTest(interrupted_write=interrupted_write), patch("reserve_cli.short.Client") as client:
+                client.return_value.depots.return_value = depots
+                count = 0
+
+                def interrupt_after_write(name, value):
+                    nonlocal count
+                    original_write(name, value)
+                    count += 1
+                    if count == interrupted_write:
+                        raise KeyboardInterrupt
+
+                with patch.object(self.store, "write", side_effect=interrupt_after_write):
+                    with self.assertRaises(KeyboardInterrupt):
+                        auth_wizard(self.console, self.store, path)
+                for name, data in before.items():
+                    self.assertEqual((self.store.directory / f"{name}.bin").read_bytes(), data)
+
+    def test_ctrl_c_during_first_auth_leaves_no_account(self):
+        path = Path(self.temp.name) / "new.env"
+        path.write_text("student=test-student\npassword=new-password\ndorm_id=10\nmain_id=20\ndays=3\n",
+                        encoding="utf-8")
+        depots = [{"id": 10, "nameFR": "Dorm", "breakfast": True, "dinner": True},
+                  {"id": 20, "nameFR": "Main", "lunch": True}]
+        original_write = self.store.write
+
+        def interrupt_after_first_write(name, value):
+            original_write(name, value)
+            raise KeyboardInterrupt
+
+        with patch("reserve_cli.short.Client") as client:
+            client.return_value.depots.return_value = depots
+            with patch.object(self.store, "write", side_effect=interrupt_after_first_write):
+                with self.assertRaises(KeyboardInterrupt):
+                    auth_wizard(self.console, self.store, path)
+        for name in ("profile", "order", "run_state"):
+            self.assertFalse((self.store.directory / f"{name}.bin").exists())
 
     def test_reauth_file_keeps_existing_dorm_when_old_name_has_changed(self):
         self.store.write("profile", {"student": "test-student", "password": "old-password",

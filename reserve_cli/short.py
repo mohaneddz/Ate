@@ -83,8 +83,7 @@ def read_activity(path: Path, earliest: date) -> list[dict]:
 
 
 def append_activity(store: Store, message: str) -> None:
-    with (store.directory / "runs.jsonl").open("a", encoding="utf-8") as stream:
-        stream.write(json.dumps({"at": local_now().isoformat(), "message": message}, ensure_ascii=False) + "\n")
+    store.append_log(json.dumps({"at": local_now().isoformat(), "message": message}, ensure_ascii=False))
 
 
 def order_text(order: dict | None, today: date) -> str:
@@ -318,11 +317,14 @@ def auth_wizard(console: Console, store: Store, credential_file: Path | None = N
             if not raw_days.isdecimal() or not 1 <= int(raw_days) <= MAX_DAYS:
                 raise ValueError("Choose a number from 1 to 366 days.")
             order = {"kind": "days", "days": int(raw_days), "paused": False, "revision": str(uuid.uuid4())}
-        store.write("profile", profile)
-        store.write("order", order)
-        store.write("run_state", {})
-        console.print(plain("✓ Account ready. Login details are encrypted for this Windows user.", "green"))
-        console.print(plain("Your standing order is ready for the background checker.", "dim"))
+        with store.transaction("profile", "order", "run_state"):
+            store.write("profile", profile)
+            store.write("order", order)
+            store.write("run_state", {})
+            protection = ("encrypted for this Windows user" if os.name == "nt"
+                          else "stored in files only your Linux user can read")
+            console.print(plain(f"✓ Account ready. Login details are {protection}.", "green"))
+            console.print(plain("Your standing order is ready for the background checker.", "dim"))
         return 0
 
 
@@ -339,6 +341,13 @@ def doctor(console: Console, store: Store) -> None:
     if sys.platform == "win32":
         try:
             process = subprocess.run(["schtasks", "/Query", "/TN", "Ate", "/FO", "LIST"],
+                                     capture_output=True, text=True, errors="replace", timeout=10)
+            task = "Installed" if process.returncode == 0 else "Missing"
+        except (OSError, subprocess.TimeoutExpired):
+            task = "Could not check"
+    elif sys.platform.startswith("linux"):
+        try:
+            process = subprocess.run(["systemctl", "--user", "is-enabled", "ate.timer"],
                                      capture_output=True, text=True, errors="replace", timeout=10)
             task = "Installed" if process.returncode == 0 else "Missing"
         except (OSError, subprocess.TimeoutExpired):
