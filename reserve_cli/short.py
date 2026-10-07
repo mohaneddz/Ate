@@ -433,8 +433,10 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         credential_file = Path(argv[1].strip().strip('"')).expanduser() if len(argv) == 2 else None
         return auth_wizard(console, store, credential_file)
     if command == "background":
-        if len(argv) != 1:
-            raise ValueError("Background runner takes no arguments.")
+        if len(argv) == 3 and argv[1] == "--state-dir":
+            store = Store(Path(argv[2]))
+        elif len(argv) != 1:
+            raise ValueError("Background runner takes no arguments except --state-dir PATH.")
         return cli.main(["--state-dir", str(store.directory), "run"])
     if command.isdecimal():
         if len(argv) != 1 or not 1 <= int(command) <= MAX_DAYS:

@@ -34,6 +34,7 @@ if ($existing -and $existing.Description -notlike 'Ate:*') {
 if ($existing -and -not $NoSchedule) { Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue }
 
 $exePath = Join-Path $binPath 'ate.exe'
+$freshExecutable = -not (Test-Path -LiteralPath $exePath -PathType Leaf)
 if ($defaultInstall) {
     $helper = Join-Path $packagePath 'scripts\manage-program-files.ps1'
     if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'The Program Files installer helper is missing.' }
@@ -54,7 +55,7 @@ if ($MigrateFrom) {
     if (-not (Test-Path -LiteralPath (Join-Path $oldPath 'profile.bin'))) {
         throw 'Migration folder has no encrypted profile.'
     }
-    foreach ($name in @('profile.bin','order.bin','run_state.bin','journal.bin',
+    foreach ($name in @('profile.bin','order.bin','run_state.bin','journal.bin','config.bin','auth-transaction.bin',
                          'reservation_cache.bin','depot_cache.bin','runs.jsonl')) {
         $from = Join-Path $oldPath $name
         $to = Join-Path $statePath $name
@@ -66,7 +67,7 @@ if ($MigrateFrom) {
 }
 if ($defaultInstall -and -not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin')) -and
     (Test-Path -LiteralPath (Join-Path $legacyState 'profile.bin') -PathType Leaf)) {
-    foreach ($name in @('profile.bin','order.bin','run_state.bin','journal.bin',
+    foreach ($name in @('profile.bin','order.bin','run_state.bin','journal.bin','config.bin','auth-transaction.bin',
                          'reservation_cache.bin','depot_cache.bin','runs.jsonl')) {
         $from = Join-Path $legacyState $name
         $to = Join-Path $statePath $name
@@ -80,7 +81,19 @@ if ($defaultInstall -and -not (Test-Path -LiteralPath (Join-Path $statePath 'pro
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
     if ($NoSetup) { throw 'No account is configured. Run the installer without -NoSetup.' }
     & $exePath auth
-    if ($LASTEXITCODE -ne 0) { throw 'Account setup did not finish. No scheduler was installed.' }
+    if ($LASTEXITCODE -ne 0) {
+        if ($freshExecutable) {
+            if ($defaultInstall) {
+                $helper = Join-Path $packagePath 'scripts\manage-program-files.ps1'
+                $arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Uninstall' -f $helper
+                $cleanup = Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden -ArgumentList $arguments -Wait -PassThru
+                if ($cleanup.ExitCode -ne 0) { Write-Warning 'Partial app files could not be removed from Program Files.' }
+            } elseif (Test-Path -LiteralPath $binPath) {
+                Remove-Item -LiteralPath $binPath -Recurse -Force
+            }
+        }
+        throw 'Account setup did not finish. No scheduler was installed.'
+    }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'order.bin'))) {
     throw 'No standing order is configured. Run res auth or set an order first.'

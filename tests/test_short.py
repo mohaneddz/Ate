@@ -78,6 +78,19 @@ class ShortCommandTests(unittest.TestCase):
                 set_interval(self.store, 30)
         self.assertEqual(interval_minutes(self.store), 5)
 
+    def test_linux_config_updates_installed_timer(self):
+        if not sys.platform.startswith("linux"):
+            self.skipTest("Linux systemd timer")
+        config_home = Path(self.temp.name) / "config-home"
+        unit = config_home / "systemd" / "user" / "ate.timer"
+        unit.parent.mkdir(parents=True)
+        unit.write_text("[Timer]\nOnUnitInactiveSec=5min\nUnit=ate.service\n", encoding="utf-8")
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(config_home)}), \
+             patch("reserve_cli.config._run") as systemctl:
+            self.assertEqual(run(["config", "interval", "1d"], self.console, self.store), 0)
+        self.assertIn("OnUnitInactiveSec=1440min", unit.read_text(encoding="utf-8"))
+        self.assertEqual(systemctl.call_count, 2)
+
     @patch("reserve_cli.short.local_now", return_value=datetime(2026, 10, 3, 20, tzinfo=ZoneInfo("Africa/Algiers")))
     def test_short_days_saves_order_then_runs(self, _):
         with patch("reserve_cli.short.legacy", side_effect=[0, 0]) as legacy:

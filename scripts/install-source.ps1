@@ -16,7 +16,7 @@ $oldState = Join-Path $rootPath '.reserve'
 New-Item -ItemType Directory -Path $statePath -Force | Out-Null
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin')) -and
     (Test-Path -LiteralPath (Join-Path $oldState 'profile.bin'))) {
-    foreach ($name in @('profile.bin','order.bin','run_state.bin','journal.bin',
+    foreach ($name in @('profile.bin','order.bin','run_state.bin','journal.bin','config.bin','auth-transaction.bin',
                          'reservation_cache.bin','depot_cache.bin','runs.jsonl')) {
         $from = Join-Path $oldState $name
         $to = Join-Path $statePath $name
@@ -33,7 +33,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'order.bin'))) {
     throw 'No standing order is configured. Run res auth or res 3 first.'
 }
-& (Join-Path $PSScriptRoot 'install-schedule.ps1') -ProjectRoot $rootPath -Python $python
+$everyMinutes = [int](& $python -m reserve_cli.short config --minutes)
+if ($LASTEXITCODE -ne 0) { throw 'Could not read the saved check interval.' }
+& (Join-Path $PSScriptRoot 'install-schedule.ps1') -ProjectRoot $rootPath -Python $python -EveryMinutes $everyMinutes
 $scriptsPath = (& $python -c "import sysconfig; print(sysconfig.get_path('scripts'))").Trim()
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $scriptsPath -PathType Container)) {
     throw 'Could not find the Python Scripts directory for the ate command.'

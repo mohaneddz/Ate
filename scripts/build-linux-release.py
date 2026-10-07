@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import argparse
 from pathlib import Path
 import subprocess
 import sys
@@ -17,6 +18,9 @@ ARCHIVE = RELEASE / f"Ate-{VERSION}-linux.tar.gz"
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--binary", type=Path, help="PyInstaller executable built on Ubuntu 22.04")
+    args = parser.parse_args()
     RELEASE.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory() as temporary:
         wheels = Path(temporary)
@@ -31,10 +35,14 @@ def main() -> None:
             "README.md": ROOT / "README.md",
             wheel.name: wheel,
         }
+        if args.binary:
+            if not args.binary.is_file():
+                raise RuntimeError(f"Linux executable is missing: {args.binary}")
+            files["ate"] = args.binary
         with tarfile.open(ARCHIVE, "w:gz") as archive:
             for name, path in files.items():
                 info = archive.gettarinfo(str(path), arcname=f"Ate-{VERSION}-linux/{name}")
-                info.mode = 0o755 if name.endswith(".sh") else 0o644
+                info.mode = 0o755 if name.endswith(".sh") or name == "ate" else 0o644
                 with path.open("rb") as stream:
                     archive.addfile(info, stream)
     digest = hashlib.sha256(ARCHIVE.read_bytes()).hexdigest()

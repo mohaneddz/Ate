@@ -50,6 +50,9 @@ class Store:
             log = self.directory / "runs.jsonl"
             if log.exists():
                 log.chmod(0o600)
+            for path in self.directory.glob("*.bin"):
+                if path.is_file() and not path.is_symlink():
+                    path.chmod(0o600)
 
     def read(self, name: str, default=None):
         if (self.directory / "auth-transaction.bin").exists() and not getattr(self, "_locked", False):

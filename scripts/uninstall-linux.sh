@@ -25,7 +25,8 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 for name in ate res; do
     link="$bin_dir/$name"
-    if [ -L "$link" ] && [ "$(readlink "$link")" = "$app_dir/venv/bin/$name" ]; then
+    if [ -L "$link" ] && { [ "$(readlink "$link")" = "$app_dir/launcher/$name" ] ||
+        [ "$(readlink "$link")" = "$app_dir/venv/bin/$name" ]; }; then
         rm -- "$link"
     fi
 done
