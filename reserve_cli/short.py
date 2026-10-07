@@ -23,6 +23,7 @@ from . import cli
 from .api import ApiError, Client
 from .auth import load_credentials
 from .booking import BookingError, MEALS, make_plan, meal_number, order_dates
+from .config import interval_label, interval_minutes, parse_interval, set_interval
 from .store import Store, StoreError
 from .paths import default_state_dir
 from .signing import SIGNING_KEY
@@ -230,6 +231,7 @@ def help_screen(console: Console) -> None:
         (f"{name} log 30", "Past 30 days of reservations and CLI activity."),
         (f"{name} date 10-05", "Book a specific date within the service's 3-day window."),
         (f"{name} sync", "Check and fulfill the current order now."),
+        (f"{name} config", "View or change check interval, order, and account settings."),
         (f"{name} pause / resume", "Pause or resume automatic booking."),
         (f"{name} depots", "Show available restaurants and IDs."),
         (f"{name} doctor", "Show setup, scheduler and recent run health."),
@@ -389,6 +391,42 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         help_screen(console)
         return 0
     command = argv[0].lower()
+    if command == "config":
+        if len(argv) == 2 and argv[1] == "--minutes":
+            console.print(str(interval_minutes(store)))
+            return 0
+        if len(argv) == 1:
+            heading(console, "Ate settings")
+            table = Table(box=box.SIMPLE, show_header=False)
+            table.add_column("Setting", style="cyan")
+            table.add_column("Value")
+            table.add_row("Check interval", interval_label(interval_minutes(store)))
+            table.add_row("Standing order", order_text(store.read("order"), today))
+            profile = store.read("profile") or {}
+            table.add_row("Account", str(profile.get("student", "Not configured")))
+            table.add_row("Dorm ID", str(profile.get("dorm_id", "Not configured")))
+            table.add_row("Main restaurant ID", str(profile.get("main_id", "Not configured")))
+            console.print(table)
+            console.print(f"Change: {prog()} config interval 15m | 2h | 1d")
+            console.print(f"Order: {prog()} config days 3 | until MM-DD | pause | resume")
+            console.print(f"Account or restaurants: {prog()} config account")
+            return 0
+        if len(argv) == 3 and argv[1] == "interval":
+            minutes = parse_interval(argv[2])
+            installed = set_interval(store, minutes)
+            console.print(plain(f"Check interval set to {interval_label(minutes)}."))
+            if not installed:
+                console.print(plain("The scheduler is not installed yet; the installer will use this setting.", "yellow"))
+            return 0
+        if len(argv) == 3 and argv[1] == "days":
+            return run([argv[2]], console, store)
+        if len(argv) == 3 and argv[1] == "until":
+            return run(["until", argv[2]], console, store)
+        if len(argv) == 2 and argv[1] in ("pause", "resume"):
+            return run([argv[1]], console, store)
+        if len(argv) == 2 and argv[1] == "account":
+            return run(["auth"], console, store)
+        raise ValueError(f"Use {prog()} config, or {prog()} config interval 15m | 2h | 1d.")
     if command in ("auth", "setup"):
         if len(argv) > 2:
             raise ValueError(f"Use {prog()} auth [CREDENTIAL-FILE].")

@@ -85,6 +85,10 @@ if (-not (Test-Path -LiteralPath (Join-Path $statePath 'profile.bin'))) {
 if (-not (Test-Path -LiteralPath (Join-Path $statePath 'order.bin'))) {
     throw 'No standing order is configured. Run res auth or set an order first.'
 }
+$everyMinutes = [int](& $exePath config --minutes)
+if ($LASTEXITCODE -ne 0 -or $everyMinutes -lt 1 -or $everyMinutes -gt 10080) {
+    throw 'Could not read the saved check interval.'
+}
 
 $oldUserPath = [Environment]::GetEnvironmentVariable('Path','User')
 $entries = @($oldUserPath -split ';' | Where-Object { $_.Trim() })
@@ -105,7 +109,7 @@ if (-not $NoSchedule) {
         -Argument $arguments -WorkingDirectory $binPath
     $triggers = @(
         (New-ScheduledTaskTrigger -AtLogOn -User $currentUser),
-        (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5))
+        (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $everyMinutes))
     )
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable `
         -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
@@ -113,7 +117,7 @@ if (-not $NoSchedule) {
     $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggers `
         -Settings $settings -Principal $principal `
-        -Description 'Ate: fulfill the current personal meal order once daily when online.' -Force | Out-Null
+        -Description 'Ate: fulfill the current personal meal order when online.' -Force | Out-Null
     if ($defaultInstall) {
         $oldTask = Get-ScheduledTask -TaskName 'Couscous Cron' -ErrorAction SilentlyContinue
         $oldExe = Join-Path $legacyBin 'res.exe'
@@ -124,7 +128,7 @@ if (-not $NoSchedule) {
             Write-Host 'Previous Couscous Cron background task replaced.' -ForegroundColor Green
         }
     }
-    Write-Host 'Background checks installed for sign-in and every five minutes while online.' -ForegroundColor Green
+    Write-Host "Background checks installed for sign-in and every $everyMinutes minutes while online." -ForegroundColor Green
     Start-ScheduledTask -TaskName $taskName
 } else {
     Write-Host 'Scheduler registration skipped for this test install.' -ForegroundColor Yellow

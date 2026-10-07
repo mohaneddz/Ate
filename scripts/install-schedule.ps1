@@ -3,7 +3,7 @@ param(
     [string]$TaskName = 'Ate',
     [string]$ProjectRoot = '',
     [string]$Python = '',
-    [ValidateRange(1, 60)][int]$EveryMinutes = 5
+    [ValidateRange(1, 10080)][int]$EveryMinutes = 5
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ProjectRoot) {
@@ -25,7 +25,7 @@ $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($existing -and ($existing.Actions.WorkingDirectory -ne $rootPath -or $existing.Description -notlike 'Ate:*')) {
     throw 'A different task uses this name. Choose another -TaskName.'
 }
-# Use pythonw to avoid flashing a terminal every five minutes. The CLI records
+# Use pythonw to avoid flashing a terminal during checks. The CLI records
 # scheduled results and errors in the per-user state folder.
 $pythonWindowless = Join-Path (Split-Path -Parent $pythonPath) 'pythonw.exe'
 if (Test-Path -LiteralPath $pythonWindowless) {
@@ -42,9 +42,9 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAv
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
 $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
-if ($PSCmdlet.ShouldProcess($TaskName, 'Register online reservation checks at sign-in and every five minutes')) {
+if ($PSCmdlet.ShouldProcess($TaskName, "Register online reservation checks at sign-in and every $EveryMinutes minutes")) {
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
         -Settings $settings -Principal $principal `
-        -Description 'Ate: fulfill the current personal meal order once daily when online.' -Force | Out-Null
+        -Description 'Ate: fulfill the current personal meal order when online.' -Force | Out-Null
     Write-Output "Installed '$TaskName'. Checks every $EveryMinutes minutes while this Windows user is signed in and online."
 }

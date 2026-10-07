@@ -55,6 +55,7 @@ if [ ! -f "$state_dir/order.bin" ]; then
     echo 'No standing order was configured. Run ate auth and try again.' >&2
     exit 1
 fi
+every_minutes=$("$app_dir/venv/bin/ate" config --minutes)
 
 printf '%s\n' "$state_dir" > "$app_dir/state-path"
 cat > "$app_dir/run-background" <<'EOF'
@@ -78,13 +79,13 @@ Description=Ate meal reservation check
 Type=oneshot
 ExecStart=%h/.local/share/ate/run-background
 EOF
-cat > "$unit_dir/ate.timer" <<'EOF'
+cat > "$unit_dir/ate.timer" <<EOF
 [Unit]
 Description=Check Ate meal reservations while signed in
 
 [Timer]
 OnStartupSec=1min
-OnUnitInactiveSec=5min
+OnUnitInactiveSec=${every_minutes}min
 Unit=ate.service
 
 [Install]

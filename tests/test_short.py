@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from rich.console import Console
 
 from reserve_cli.api import ApiError
+from reserve_cli.config import interval_minutes, parse_interval, set_interval
 from reserve_cli.auth import load_credentials
 from reserve_cli.paths import default_state_dir
 from reserve_cli.short import (bookings_table, fetch_bookings, legacy, parse_day,
@@ -59,6 +60,23 @@ class ShortCommandTests(unittest.TestCase):
         for bad in ("13-01", "10/05", "2026-02-30", "tomorrow"):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 parse_day(bad, date(2026, 10, 3))
+
+    def test_config_interval_parses_units_and_persists(self):
+        self.assertEqual([parse_interval(value) for value in ("15m", "2h", "1d")], [15, 120, 1440])
+        for value in ("0m", "1.5h", "8d", "soon", "2w"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                parse_interval(value)
+        with patch("reserve_cli.config.apply_interval", return_value=False):
+            self.assertEqual(run(["config", "interval", "2h"], self.console, self.store), 0)
+        self.assertEqual(interval_minutes(self.store), 120)
+        self.assertEqual(run(["config", "--minutes"], self.console, self.store), 0)
+        self.assertIn("120", self.output.getvalue())
+
+    def test_config_preserves_old_interval_if_scheduler_fails(self):
+        with patch("reserve_cli.config.apply_interval", side_effect=RuntimeError("timer failed")):
+            with self.assertRaisesRegex(RuntimeError, "timer failed"):
+                set_interval(self.store, 30)
+        self.assertEqual(interval_minutes(self.store), 5)
 
     @patch("reserve_cli.short.local_now", return_value=datetime(2026, 10, 3, 20, tzinfo=ZoneInfo("Africa/Algiers")))
     def test_short_days_saves_order_then_runs(self, _):
