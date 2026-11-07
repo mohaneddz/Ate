@@ -238,7 +238,7 @@ def help_screen(console: Console) -> None:
     ]:
         table.add_row(command, detail)
     console.print(table)
-    console.print(plain("Breakfast and dinner use the dorm. Lunch uses the main restaurant Sunday–Thursday.", "dim"))
+    console.print(plain("Breakfast and dinner use the dorm, and so does lunch on Friday and Saturday. Lunch uses the main restaurant Sunday–Thursday.", "dim"))
 
 
 def auth_wizard(console: Console, store: Store, credential_file: Path | None = None) -> int:

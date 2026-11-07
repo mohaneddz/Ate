@@ -2,7 +2,7 @@
 
 # Ate
 
-Ate keeps your Webetu meals booked while your computer is signed in and online. It checks existing reservations before booking breakfast and dinner at your dorm and Sunday through Thursday lunch at your main restaurant.
+Ate keeps your Webetu meals booked while your computer is signed in and online. It checks existing reservations before booking breakfast and dinner at your dorm, lunch at your dorm on Friday and Saturday, and lunch at your main restaurant Sunday through Thursday.
 
 ## Install
 
