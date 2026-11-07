@@ -64,10 +64,25 @@ class PlanningTests(unittest.TestCase):
         plan = make_plan([MONDAY], PROFILE, DEPOTS, [])
         self.assertEqual([(p.meal, p.depot["id"]) for p in plan], [(1, 10), (2, 20), (3, 10)])
 
-    def test_weekend_has_no_lunch_and_sunday_does(self):
+    def test_weekend_lunch_comes_from_the_dorm(self):
         for day in (date(2026, 10, 9), date(2026, 10, 10)):
-            self.assertEqual([p.meal for p in make_plan([day], PROFILE, DEPOTS, [])], [1, 3])
-        self.assertEqual(len(make_plan([date(2026, 10, 11)], PROFILE, DEPOTS, [])), 3)
+            plan = make_plan([day], PROFILE, DEPOTS, [])
+            self.assertEqual([(p.meal, p.depot["id"]) for p in plan], [(1, 10), (2, 10), (3, 10)])
+
+    def test_sunday_through_thursday_lunch_comes_from_main(self):
+        for day in (date(2026, 10, 11), date(2026, 10, 12), date(2026, 10, 15)):
+            plan = make_plan([day], PROFILE, DEPOTS, [])
+            self.assertEqual([(p.meal, p.depot["id"]) for p in plan], [(1, 10), (2, 20), (3, 10)])
+
+    def test_dorm_without_lunch_skips_weekend_lunch_only(self):
+        depots = [{**DEPOTS[0], "lunch": False}, DEPOTS[1]]
+        plan = make_plan([date(2026, 10, 9)], PROFILE, depots, [])
+        self.assertEqual([p.meal for p in plan], [1, 3])
+
+    def test_weekend_lunch_booked_at_main_is_a_conflict(self):
+        friday = date(2026, 10, 9)
+        with self.assertRaisesRegex(BookingError, "elsewhere"):
+            make_plan([friday], PROFILE, DEPOTS, [row(2, friday, depot="Main")])
 
     def test_conflict_stops_whole_plan(self):
         with self.assertRaisesRegex(BookingError, "elsewhere"):

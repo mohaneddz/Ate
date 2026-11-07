@@ -72,13 +72,15 @@ def make_plan(days, profile, depots, rows):
     plan = []
     for day in sorted(set(days)):
         for meal in MEALS:
-            # Python: Monday=0 ... Sunday=6. Lunch is Sunday through Thursday.
-            if meal == 2 and day.weekday() in (4, 5):
-                continue
-            depot_id = profile["main_id"] if meal == 2 else profile["dorm_id"]
+            # Python: Monday=0 ... Sunday=6. Lunch comes from the main restaurant
+            # Sunday through Thursday and from the dorm on Friday and Saturday.
+            weekend_lunch = meal == 2 and day.weekday() in (4, 5)
+            depot_id = profile["main_id"] if meal == 2 and not weekend_lunch else profile["dorm_id"]
             if depot_id not in locations:
                 raise BookingError("A configured restaurant is not offered to this account.")
             depot = locations[depot_id]
+            if weekend_lunch and depot.get("lunch") is not True:
+                continue
             if depot.get(MEALS[meal]) is not True:
                 raise BookingError(f"The selected restaurant does not offer {MEALS[meal]}.")
             item = PlannedMeal(day, meal, depot)
