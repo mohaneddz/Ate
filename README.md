@@ -29,6 +29,8 @@ Both installers ask how many days to keep booked and start background checks. Up
 
 Webetu opens reservations only a few days ahead. Ate checks again later; it cannot run while your computer is off or asleep. Cancelling `res auth` with Ctrl+C keeps the prior account, and an interrupted save is recovered on the next command.
 
+If the university login is rejected twice in a row, 30 minutes apart, Ate suspends automatic booking so it does not keep retrying a bad password. A suspended run writes one line to the log per day, and `res show`, `res log`, `res plan` and `res doctor` all warn about it. Run `res auth` to sign in again. A one-off server error at any other step only delays the next attempt.
+
 ## Remove
 
 On Windows, run `uninstall.bat` from the ZIP or Program Files. On Linux, run `~/.local/share/ate/uninstall.sh`. Both keep account data for an easy reinstall. On Linux, add `--purge-data` to delete it too. On Windows, use `scripts/uninstall-package.ps1 -PurgeData` from the ZIP to remove it.
