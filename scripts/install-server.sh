@@ -22,7 +22,7 @@ id ate >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/ate
 install -d -o ate -g ate -m 700 /var/lib/ate "$state_home"
 
 python3 -m venv /opt/ate
-/opt/ate/bin/pip install --quiet --upgrade "$wheel"
+/opt/ate/bin/pip install --quiet --upgrade --force-reinstall "$wheel"
 
 # 'ate' and 'res' run as the service user so 'ate auth' over SSH edits the service's own state.
 for name in ate res; do
