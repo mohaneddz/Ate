@@ -38,6 +38,12 @@ Create a bot with [@BotFather](https://t.me/BotFather), then put its HTTP API to
 
 Scheduled runs message you when meals are booked, when the first failure of a streak happens, when booking is suspended (repeated daily), and when it recovers. Commands you run yourself, including `res sync`, stay silent. A failed alert is logged and never affects booking.
 
+## Always-on server and Telegram commands
+
+Booking only runs while your PC is awake. On a Debian or Ubuntu server that stays on, `scripts/install-server.sh` installs Ate as a system service that runs `ate serve`: the scheduled booking check plus a Telegram bot that answers commands within a second or two, even when your PC is off. Build the wheel with `pip wheel . --no-deps`, copy it and the script to the server, and run `sh install-server.sh ate_cli-VERSION-py3-none-any.whl` as root. Then run `ate auth`, `ate telegram bot.env`, and `systemctl start ate`. The server's IP must be able to reach Webetu; an Algerian address is safest.
+
+Only the chat paired with `ate telegram` is answered. Commands: `/status`, `/today`, `/plan`, `/sync`, `/log`, `/date`, `/days`, `/until`, `/pause`, `/resume`, `/interval`, `/config`, `/depots`, `/doctor` and `/help`. Signing in is the one thing that stays in the terminal, so your password never passes through chat.
+
 ## Remove
 
 On Windows, run `uninstall.bat` from the ZIP or Program Files. On Linux, run `~/.local/share/ate/uninstall.sh`. Both keep account data for an easy reinstall. On Linux, add `--purge-data` to delete it too. On Windows, use `scripts/uninstall-package.ps1 -PurgeData` from the ZIP to remove it.
