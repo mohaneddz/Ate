@@ -16,9 +16,28 @@ ONOU = "https://gs-api.onou.dz/api"
 
 
 class ApiError(Exception):
-    def __init__(self, message, status=None):
+    def __init__(self, message, status=None, stage=None):
         super().__init__(message)
         self.status = status
+        self.stage = stage
+
+    @property
+    def credentialRejected(self) -> bool:
+        return self.stage == WEB_LOGIN and self.status in (401, 403)
+
+
+WEB_LOGIN = "university login"
+
+
+def stage_label(base: str, path: str) -> str:
+    """Name the failing step without putting account identifiers in logs."""
+    if base == WEBETU:
+        return WEB_LOGIN if path.startswith("/authentication/") else "university profile lookup"
+    if path == "/loginpwebetu":
+        return "meal service login"
+    if path == "/reservemeal":
+        return "reservation"
+    return "meal service"
 
 
 def compact_json(value) -> str:
@@ -53,7 +72,9 @@ class Client:
         except requests.RequestException:
             raise ApiError("Network request failed; no automatic retry was made.") from None
         if not 200 <= response.status_code < 300:
-            raise ApiError(f"The service returned HTTP {response.status_code}; response content withheld.", response.status_code)
+            stage = stage_label(base, path)
+            raise ApiError(f"The {stage} returned HTTP {response.status_code}; response content withheld.",
+                           response.status_code, stage)
         try:
             return response.json()
         except ValueError:

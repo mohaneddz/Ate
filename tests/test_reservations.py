@@ -8,9 +8,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from reserve_cli.api import ApiError, Client, compact_json, signed_headers
+from reserve_cli.api import ApiError, Client, compact_json, signed_headers, stage_label
 from reserve_cli.booking import (BookingError, apply_plan, make_plan, order_dates)
-from reserve_cli.cli import execute, parser
+from reserve_cli.cli import execute, main, parser
 from reserve_cli.store import Store, StoreError
 
 MONDAY = date(2026, 10, 5)
@@ -208,6 +208,78 @@ class SchedulerTests(unittest.TestCase):
         with patch("reserve_cli.cli.Client") as client:
             execute(parser().parse_args(["run"]), store, lambda _: None)
         client.assert_not_called()
+
+
+class AuthSuspensionTests(unittest.TestCase):
+    NOW = datetime(2026, 11, 11, 9, tzinfo=ZoneInfo("Africa/Algiers"))
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.store = Store(Path(self.temporary.name))
+        self.store.write("profile", {**PROFILE, "student": "test-student", "password": "test-password"})
+        self.store.write("order", {"kind": "days", "days": 3, "revision": "one"})
+
+    def runOnce(self, error):
+        with patch("reserve_cli.cli.now_local", return_value=self.NOW),                 patch("reserve_cli.cli.Client") as client:
+            client.return_value.login.side_effect = error
+            return main(["--state-dir", self.temporary.name, "run"])
+
+    def expireBackoff(self):
+        state = self.store.read("run_state")
+        state["retry_after"] = "2000-01-01T00:00:00+00:00"
+        self.store.write("run_state", state)
+
+    def logText(self):
+        path = Path(self.temporary.name) / "runs.jsonl"
+        return path.read_text(encoding="utf-8") if path.exists() else ""
+
+    def loginRejected(self):
+        return ApiError("The university login returned HTTP 401; response content withheld.", 401, "university login")
+
+    def test_single_login_rejection_does_not_suspend(self):
+        self.assertEqual(self.runOnce(self.loginRejected()), 1)
+        state = self.store.read("run_state")
+        self.assertFalse(state["authentication_blocked"])
+        self.assertEqual(state["credential_strikes"], 1)
+        self.assertIn("university login", state["last_error"])
+
+    def test_second_consecutive_login_rejection_suspends_and_says_so(self):
+        self.runOnce(self.loginRejected())
+        self.expireBackoff()
+        self.assertEqual(self.runOnce(self.loginRejected()), 1)
+        self.assertTrue(self.store.read("run_state")["authentication_blocked"])
+        self.assertIn("suspended", self.logText())
+        self.assertIn("ate auth", self.logText())
+
+    def test_rejection_after_the_login_step_never_suspends(self):
+        later = ApiError("The meal service login returned HTTP 401; response content withheld.", 401, "meal service login")
+        for _ in range(4):
+            self.runOnce(later)
+            self.expireBackoff()
+        state = self.store.read("run_state")
+        self.assertFalse(state["authentication_blocked"])
+        self.assertEqual(state["credential_strikes"], 0)
+
+    def test_suspended_run_logs_once_per_day(self):
+        self.store.write("run_state", {"revision": "one", "authentication_blocked": True})
+        for _ in range(3):
+            with patch("reserve_cli.cli.now_local", return_value=self.NOW),                     patch("reserve_cli.cli.Client") as client:
+                main(["--state-dir", self.temporary.name, "run"])
+            client.assert_not_called()
+        self.assertEqual(self.logText().count("suspended"), 1)
+
+    def test_http_error_names_the_step_without_account_ids(self):
+        self.assertEqual(stage_label("https://api-webetu.mesrs.dz/api", "/authentication/v1/"), "university login")
+        self.assertEqual(stage_label("https://api-webetu.mesrs.dz/api", "/infos/bac/SECRETUUID/demandesHebregement"),
+                         "university profile lookup")
+        client = Client(PROFILE)
+        response = unittest.mock.Mock(status_code=401)
+        with patch.object(client.session, "request", return_value=response):
+            with self.assertRaises(ApiError) as result:
+                client._request("POST", "https://api-webetu.mesrs.dz/api", "/authentication/v1/")
+        self.assertTrue(result.exception.credentialRejected)
+        self.assertIn("university login", str(result.exception))
 
 
 class StorageTests(unittest.TestCase):

@@ -15,6 +15,12 @@ from .paths import default_state_dir
 from .signing import SIGNING_KEY
 
 
+CREDENTIAL_STRIKES_TO_SUSPEND = 2
+CREDENTIAL_RECHECK_SECONDS = 1800
+SUSPENDED_NOTICE = ("Automatic booking is suspended because the university login was rejected twice in a row. "
+                    "Run 'ate auth' to sign in again.")
+
+
 def now_local():
     return datetime.now(ZoneInfo("Africa/Algiers"))
 
@@ -158,6 +164,9 @@ def execute(args, store, emit):
             if state.get("completed") == today.isoformat():
                 return
             if state.get("authentication_blocked"):
+                if state.get("blocked_noticed") != today.isoformat():
+                    emit(SUSPENDED_NOTICE)
+                    store.write("run_state", {**state, "blocked_noticed": today.isoformat()})
                 return
             if state.get("retry_after") and datetime.now(timezone.utc) < datetime.fromisoformat(state["retry_after"]):
                 return
@@ -215,9 +224,22 @@ def main(argv=None):
                     state = store.read("run_state", {})
                     failures = state.get("failures", 0) + 1
                     delay = min(3600, 300 * 2 ** min(failures - 1, 4))
+                    rejected = isinstance(exc, ApiError) and exc.credentialRejected
+                    credentialStrikes = state.get("credential_strikes", 0) + 1 if rejected else 0
+                    blocked = credentialStrikes >= CREDENTIAL_STRIKES_TO_SUSPEND
+                    if rejected and not blocked:
+                        # Give a transient portal fault time to clear before the second attempt.
+                        delay = CREDENTIAL_RECHECK_SECONDS
                     store.write("run_state", {"revision": order.get("revision"), "failures": failures,
-                                              "authentication_blocked": isinstance(exc, ApiError) and exc.status in (401, 403),
+                                              "credential_strikes": credentialStrikes,
+                                              "authentication_blocked": blocked,
+                                              "blocked_noticed": now_local().date().isoformat() if blocked else None,
+                                              "last_error": str(exc), "last_error_at": now_local().isoformat(),
                                               "retry_after": (datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat()})
+                    if blocked:
+                        emit(f"Error: {exc}")
+                        emit(SUSPENDED_NOTICE)
+                        return 1
                 raise exc
     except (ApiError, BookingError, StoreError) as exc:
         emit(f"Error: {exc}")
