@@ -294,6 +294,7 @@ def help_screen(console: Console) -> None:
         (f"{name} depots", "Show available restaurants and IDs."),
         (f"{name} doctor", "Show setup, scheduler and recent run health."),
         (f"{name} telegram [FILE]", "Get booking alerts in Telegram; also 'telegram test' and 'telegram off'."),
+        (f"{name} serve", "Run checks and answer Telegram commands continuously (for an always-on machine)."),
     ]:
         table.add_row(command, detail)
     console.print(table)
@@ -498,6 +499,12 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         return auth_wizard(console, store, credential_file)
     if command in ("telegram", "bot"):
         return telegram_command(console, store, argv)
+    if command == "serve":
+        if len(argv) != 1:
+            raise ValueError(f"Use {prog()} serve without extra arguments.")
+        from .serve import serve
+        serve(store)
+        return 0
     if command == "background":
         if len(argv) == 3 and argv[1] == "--state-dir":
             store = Store(Path(argv[2]))
