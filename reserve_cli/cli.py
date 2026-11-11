@@ -224,14 +224,14 @@ def main(argv=None):
                     state = store.read("run_state", {})
                     failures = state.get("failures", 0) + 1
                     delay = min(3600, 300 * 2 ** min(failures - 1, 4))
-                    rejected = isinstance(exc, ApiError) and exc.credentialRejected
-                    credentialStrikes = state.get("credential_strikes", 0) + 1 if rejected else 0
-                    blocked = credentialStrikes >= CREDENTIAL_STRIKES_TO_SUSPEND
+                    rejected = isinstance(exc, ApiError) and exc.credential_rejected
+                    strikes = state.get("credential_strikes", 0) + 1 if rejected else 0
+                    blocked = strikes >= CREDENTIAL_STRIKES_TO_SUSPEND
                     if rejected and not blocked:
                         # Give a transient portal fault time to clear before the second attempt.
                         delay = CREDENTIAL_RECHECK_SECONDS
                     store.write("run_state", {"revision": order.get("revision"), "failures": failures,
-                                              "credential_strikes": credentialStrikes,
+                                              "credential_strikes": strikes,
                                               "authentication_blocked": blocked,
                                               "blocked_noticed": now_local().date().isoformat() if blocked else None,
                                               "last_error": str(exc), "last_error_at": now_local().isoformat(),

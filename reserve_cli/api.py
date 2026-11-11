@@ -22,7 +22,7 @@ class ApiError(Exception):
         self.stage = stage
 
     @property
-    def credentialRejected(self) -> bool:
+    def credential_rejected(self) -> bool:
         return self.stage == WEB_LOGIN and self.status in (401, 403)
 
 

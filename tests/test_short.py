@@ -17,7 +17,7 @@ from reserve_cli.auth import load_credentials
 from reserve_cli.paths import default_state_dir
 from reserve_cli.short import (bookings_table, doctor, fetch_bookings, legacy, parse_day,
                                auth_wizard,
-                               read_activity, run, stallWarning)
+                               read_activity, run, stall_warning)
 from reserve_cli.signing import SIGNING_KEY
 from reserve_cli.store import Store
 
@@ -146,13 +146,13 @@ class ShortCommandTests(unittest.TestCase):
         self.assertEqual(cached, "2026-10-03T18:00:00+01:00")
 
     def test_stall_warning_is_loud_when_suspended_and_quiet_when_healthy(self):
-        stallWarning(self.console, self.store)
+        stall_warning(self.console, self.store)
         self.assertEqual(self.output.getvalue(), "")
         self.store.write("run_state", {"failures": 1, "last_error": "The meal service returned HTTP 500"})
-        stallWarning(self.console, self.store)
+        stall_warning(self.console, self.store)
         self.assertIn("will retry", self.output.getvalue())
         self.store.write("run_state", {"authentication_blocked": True})
-        stallWarning(self.console, self.store)
+        stall_warning(self.console, self.store)
         self.assertIn("suspended", self.output.getvalue())
 
     def test_doctor_shows_the_last_error(self):

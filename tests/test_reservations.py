@@ -220,43 +220,43 @@ class AuthSuspensionTests(unittest.TestCase):
         self.store.write("profile", {**PROFILE, "student": "test-student", "password": "test-password"})
         self.store.write("order", {"kind": "days", "days": 3, "revision": "one"})
 
-    def runOnce(self, error):
+    def run_once(self, error):
         with patch("reserve_cli.cli.now_local", return_value=self.NOW),                 patch("reserve_cli.cli.Client") as client:
             client.return_value.login.side_effect = error
             return main(["--state-dir", self.temporary.name, "run"])
 
-    def expireBackoff(self):
+    def expire_backoff(self):
         state = self.store.read("run_state")
         state["retry_after"] = "2000-01-01T00:00:00+00:00"
         self.store.write("run_state", state)
 
-    def logText(self):
+    def log_text(self):
         path = Path(self.temporary.name) / "runs.jsonl"
         return path.read_text(encoding="utf-8") if path.exists() else ""
 
-    def loginRejected(self):
+    def login_rejected(self):
         return ApiError("The university login returned HTTP 401; response content withheld.", 401, "university login")
 
     def test_single_login_rejection_does_not_suspend(self):
-        self.assertEqual(self.runOnce(self.loginRejected()), 1)
+        self.assertEqual(self.run_once(self.login_rejected()), 1)
         state = self.store.read("run_state")
         self.assertFalse(state["authentication_blocked"])
         self.assertEqual(state["credential_strikes"], 1)
         self.assertIn("university login", state["last_error"])
 
     def test_second_consecutive_login_rejection_suspends_and_says_so(self):
-        self.runOnce(self.loginRejected())
-        self.expireBackoff()
-        self.assertEqual(self.runOnce(self.loginRejected()), 1)
+        self.run_once(self.login_rejected())
+        self.expire_backoff()
+        self.assertEqual(self.run_once(self.login_rejected()), 1)
         self.assertTrue(self.store.read("run_state")["authentication_blocked"])
-        self.assertIn("suspended", self.logText())
-        self.assertIn("ate auth", self.logText())
+        self.assertIn("suspended", self.log_text())
+        self.assertIn("ate auth", self.log_text())
 
     def test_rejection_after_the_login_step_never_suspends(self):
         later = ApiError("The meal service login returned HTTP 401; response content withheld.", 401, "meal service login")
         for _ in range(4):
-            self.runOnce(later)
-            self.expireBackoff()
+            self.run_once(later)
+            self.expire_backoff()
         state = self.store.read("run_state")
         self.assertFalse(state["authentication_blocked"])
         self.assertEqual(state["credential_strikes"], 0)
@@ -267,7 +267,7 @@ class AuthSuspensionTests(unittest.TestCase):
             with patch("reserve_cli.cli.now_local", return_value=self.NOW),                     patch("reserve_cli.cli.Client") as client:
                 main(["--state-dir", self.temporary.name, "run"])
             client.assert_not_called()
-        self.assertEqual(self.logText().count("suspended"), 1)
+        self.assertEqual(self.log_text().count("suspended"), 1)
 
     def test_http_error_names_the_step_without_account_ids(self):
         self.assertEqual(stage_label("https://api-webetu.mesrs.dz/api", "/authentication/v1/"), "university login")
@@ -278,7 +278,7 @@ class AuthSuspensionTests(unittest.TestCase):
         with patch.object(client.session, "request", return_value=response):
             with self.assertRaises(ApiError) as result:
                 client._request("POST", "https://api-webetu.mesrs.dz/api", "/authentication/v1/")
-        self.assertTrue(result.exception.credentialRejected)
+        self.assertTrue(result.exception.credential_rejected)
         self.assertIn("university login", str(result.exception))
 
 
