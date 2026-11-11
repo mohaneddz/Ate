@@ -27,6 +27,7 @@ from .config import interval_label, interval_minutes, parse_interval, set_interv
 from .store import Store, StoreError
 from .paths import default_state_dir
 from .signing import SIGNING_KEY
+from .chatformat import CONNECTED_ALERT, TEST_ALERT
 from .telegram import TelegramBot, TelegramError, check_token, find_private_chat, load_bot_token
 
 STATE_DIR = default_state_dir()
@@ -241,7 +242,7 @@ def telegram_command(console: Console, store: Store, argv: list[str]) -> int:
             raise BookingError(f"Telegram is not set up. Run {prog()} telegram first.")
         bot = TelegramBot(config["token"])
         try:
-            bot.send(config["chat_id"], "Test alert from Ate. Alerts are working.")
+            bot.send(config["chat_id"], TEST_ALERT)
         finally:
             bot.close()
         console.print(plain(f"Test alert sent to {config.get('name', 'your chat')}.", "green"))
@@ -265,8 +266,7 @@ def telegram_command(console: Console, store: Store, argv: list[str]) -> int:
             return 0
         with store.lock():
             store.write("telegram", {"token": token, "chat_id": chat["chat_id"], "name": chat["name"]})
-        bot.send(chat["chat_id"], "Ate is connected. You will get a message here when meals are booked "
-                                  "or something needs attention.")
+        bot.send(chat["chat_id"], CONNECTED_ALERT)
     finally:
         bot.close()
     protection = "encrypted for your Windows user" if sys.platform == "win32" else "stored in files only your Linux user can read"

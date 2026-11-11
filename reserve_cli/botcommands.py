@@ -1,4 +1,4 @@
-"""Telegram chat commands: the same actions as the terminal, with short plain replies."""
+"""Telegram chat commands: the same actions as the terminal, with short emoji replies."""
 from __future__ import annotations
 
 from contextlib import redirect_stdout
@@ -7,6 +7,7 @@ import io
 
 from . import cli
 from .api import ApiError, Client
+from .chatformat import COMMAND_ICONS, booked_alert, meals_block
 from .booking import BookingError, MEALS, make_plan, meal_number, order_dates
 from .config import interval_label, interval_minutes, parse_interval, set_interval
 from .short import MAX_DAYS, append_activity, fetch_bookings, local_now, order_text, parse_day, read_activity
@@ -29,7 +30,7 @@ COMMANDS = [
     ("doctor", "Health check"),
     ("help", "List commands"),
 ]
-AUTH_REPLY = ("Signing in needs your university password, so it stays out of chat. "
+AUTH_REPLY = ("🔐 Signing in needs your university password, so it stays out of chat.\n"
               "Run 'ate auth' on the server, then send /doctor.")
 
 
@@ -42,6 +43,14 @@ def meals_by_day(rows) -> dict:
     for row in sorted(rows, key=lambda r: (r["date_reserve"], meal_number(r))):
         grouped.setdefault(row["date_reserve"], []).append(MEALS[meal_number(row)])
     return grouped
+
+
+def event_icon(message: str) -> str:
+    if message.startswith("Confirmed:"):
+        return "✅"
+    if message.startswith("Error:") or "suspended" in message:
+        return "⚠️"
+    return "•"
 
 
 def run_cli(state_dir, arguments: list[str]) -> tuple[int, list[str]]:
@@ -61,14 +70,14 @@ def summarise(code: int, lines: list[str]) -> str:
     notes = [line for line in lines if "later day(s)" in line or line.startswith("Standing order")]
     parts = []
     if confirmed:
-        parts.append(f"Booked {len(confirmed)} meal(s):\n" + "\n".join(confirmed))
+        parts.append(booked_alert(confirmed))
     elif not errors:
-        parts.append(f"Nothing new to book. {already} meal(s) already reserved." if already
-                     else "Nothing to book right now.")
+        parts.append(f"👌 Nothing new to book. {already} meal(s) already reserved." if already
+                     else "👌 Nothing to book right now.")
     if errors:
-        parts.append("Problem: " + " ".join(errors))
-    parts.extend(notes)
-    return "\n".join(parts)
+        parts.append("⚠️ Problem: " + " ".join(errors))
+    parts.extend("ℹ️ " + note for note in notes)
+    return "\n\n".join(parts)
 
 
 class Commands:
@@ -78,7 +87,7 @@ class Commands:
     def handle(self, text: str) -> str:
         words = text.strip().split()
         if not words or not words[0].startswith("/"):
-            return "Send /help to see what I can do."
+            return "💬 Send /help to see what I can do."
         name = words[0][1:].split("@")[0].lower()
         arguments = words[1:]
         handler = {
@@ -89,16 +98,17 @@ class Commands:
             "depots": self.depots, "doctor": self.doctor, "auth": self.auth,
         }.get(name)
         if handler is None:
-            return "I don't know that command. Send /help."
+            return "🤷 I don't know that command. Send /help."
         try:
             return handler(arguments)
         except (ApiError, BookingError, StoreError, ValueError) as exc:
-            return f"Problem: {exc}"
+            return f"⚠️ Problem: {exc}"
         except Exception:
-            return "Something went wrong on the server; check its log."
+            return "💥 Something went wrong on the server; check its log."
 
     def help(self, _arguments) -> str:
-        return "Ate commands:\n" + "\n".join(f"/{name} - {detail}" for name, detail in COMMANDS)
+        return "🍴 Ate commands\n\n" + "\n".join(f"{COMMAND_ICONS.get(name, '•')} /{name} - {detail}"
+                                               for name, detail in COMMANDS)
 
     def auth(self, _arguments) -> str:
         return AUTH_REPLY
@@ -106,11 +116,11 @@ class Commands:
     def health_line(self) -> str:
         state = self.store.read("run_state", {})
         if state.get("authentication_blocked"):
-            return "Booking is SUSPENDED: the login was rejected. " + AUTH_REPLY
+            return "🛑 Booking is SUSPENDED: the login was rejected.\n" + AUTH_REPLY
         if state.get("failures"):
-            return f"Last run failed ({state.get('last_error', 'unknown error')}); retrying."
+            return f"⚠️ Last run failed ({state.get('last_error', 'unknown error')}); retrying."
         done = state.get("completed")
-        return f"Booking is healthy. Last full check: {done}." if done else "Booking is healthy."
+        return f"✅ Booking is healthy · last full check {done}" if done else "✅ Booking is healthy"
 
     def upcoming(self, only_today: bool) -> str:
         today = local_now().date().isoformat()
@@ -119,16 +129,15 @@ class Commands:
         rows = [r for r in rows if r["date_reserve"] == today] if only_today else \
             [r for r in rows if r["date_reserve"] >= today]
         if not rows:
-            return "No meals today." if only_today else "No upcoming meals booked."
-        lines = [f"{day_label(date.fromisoformat(day))}: {', '.join(meals)}"
-                 for day, meals in meals_by_day(rows).items()]
+            return "😴 No meals today." if only_today else "😴 No upcoming meals booked."
+        text = meals_block(meals_by_day(rows))
         if cached_at:
-            lines.append(f"(offline view from {cached_at[:16].replace('T', ' ')})")
-        return "\n".join(lines)
+            text += f"\n\n📴 Offline view from {cached_at[:16].replace('T', ' ')}"
+        return text
 
     def status(self, _arguments) -> str:
         order = self.store.read("order")
-        header = f"{order_text(order, local_now().date())}\n{self.health_line()}"
+        header = f"📊 Status\n📋 {order_text(order, local_now().date())}\n{self.health_line()}"
         return header + "\n\n" + self.upcoming(False)
 
     def today(self, _arguments) -> str:
@@ -149,16 +158,17 @@ class Commands:
             finally:
                 client.close()
         if not plan:
-            return "Nothing within the current booking window."
+            return "🗓️ Nothing within the current booking window."
         missing = [item for item in plan if not item.existing_id]
-        lines = [f"{len(plan)} meal(s) in the window: {len(plan) - len(missing)} booked, {len(missing)} to book."]
+        lines = [f"🗓️ {len(plan)} meal(s) in the window: ✅ {len(plan) - len(missing)} booked, ⏳ {len(missing)} to book"]
         by_day: dict = {}
         for item in missing:
-            by_day.setdefault(item.day, []).append(item.label)
-        lines += [f"{day_label(day)}: {', '.join(labels)}" for day, labels in by_day.items()]
+            by_day.setdefault(item.day.isoformat(), []).append(item.label)
+        if by_day:
+            lines.append(meals_block(by_day))
         if deferred:
-            lines.append(f"{deferred} later day(s) wait for the 3-day window.")
-        return "\n".join(lines)
+            lines.append(f"ℹ️ {deferred} later day(s) wait for the 3-day window.")
+        return "\n\n".join(lines)
 
     def sync(self, _arguments) -> str:
         return summarise(*run_cli(self.store.directory, ["run", "--force"]))
@@ -171,10 +181,10 @@ class Commands:
         # "Already reserved" repeats on every check and would bury the real events.
         events = [e for e in events if not e["message"].startswith("Already reserved:")]
         if not events:
-            return f"No new activity in the last {days} day(s). Nothing was booked or failed."
-        lines = [f"{datetime.fromisoformat(e['at']).strftime('%d %b %H:%M')}  {e['message'][:110]}"
+            return f"📭 No new activity in the last {days} day(s). Nothing was booked or failed."
+        lines = [f"{event_icon(e['message'])} {datetime.fromisoformat(e['at']).strftime('%d %b %H:%M')}  {e['message'][:110]}"
                  for e in events[-12:]]
-        return f"Last {len(lines)} event(s):\n" + "\n".join(lines)
+        return f"📜 Last {len(lines)} event(s)\n\n" + "\n".join(lines)
 
     def date(self, arguments) -> str:
         if len(arguments) != 1:
@@ -203,7 +213,7 @@ class Commands:
         if code:
             return summarise(code, lines)
         append_activity(self.store, note + " (from Telegram)")
-        return note + "\n" + summarise(*run_cli(self.store.directory, ["run", "--force"]))
+        return "📝 " + note + "\n\n" + summarise(*run_cli(self.store.directory, ["run", "--force"]))
 
     def pause(self, _arguments) -> str:
         return self.toggle("pause")
@@ -216,22 +226,23 @@ class Commands:
         if code:
             return summarise(code, lines)
         append_activity(self.store, f"Automatic booking {action}d from Telegram.")
-        return f"Automatic booking {action}d."
+        return ("⏸️" if action == "pause" else "▶️") + f" Automatic booking {action}d."
 
     def interval(self, arguments) -> str:
         if len(arguments) != 1:
             raise ValueError("Use /interval 15m, 2h or 1d.")
         minutes = parse_interval(arguments[0])
         set_interval(self.store, minutes)
-        return f"Check interval set to {interval_label(minutes)}. It applies from the next cycle."
+        return f"⏱️ Check interval set to {interval_label(minutes)}. It applies from the next cycle."
 
     def config(self, _arguments) -> str:
         profile = self.store.read("profile") or {}
         return "\n".join([
-            f"Check interval: {interval_label(interval_minutes(self.store))}",
-            f"Order: {order_text(self.store.read('order'), local_now().date())}",
-            f"Dorm ID: {profile.get('dorm_id', 'not set')}",
-            f"Main restaurant ID: {profile.get('main_id', 'not set')}",
+            "⚙️ Settings",
+            f"⏱️ Check interval: {interval_label(interval_minutes(self.store))}",
+            f"📋 Order: {order_text(self.store.read('order'), local_now().date())}",
+            f"🏠 Dorm ID: {profile.get('dorm_id', 'not set')}",
+            f"🍽️ Main restaurant ID: {profile.get('main_id', 'not set')}",
         ])
 
     def depots(self, _arguments) -> str:
@@ -244,17 +255,18 @@ class Commands:
             depots = client.depots()
         finally:
             client.close()
-        return "\n".join(f"{d['id']}  {d.get('nameFR') or d.get('nameAR')}" for d in depots)
+        return "🏠 Restaurants\n\n" + "\n".join(f"{d['id']}  {d.get('nameFR') or d.get('nameAR')}" for d in depots)
 
     def doctor(self, _arguments) -> str:
         state = self.store.read("run_state", {})
         lines = [
-            f"Account: {'configured' if self.store.read('profile') else 'setup needed'}",
-            f"Order: {order_text(self.store.read('order'), local_now().date())}",
-            f"Check interval: {interval_label(interval_minutes(self.store))}",
-            f"Automatic login: {'SUSPENDED' if state.get('authentication_blocked') else 'ready'}",
-            f"Last full check: {state.get('completed', 'none yet')}",
+            "🩺 Health check",
+            f"👤 Account: {'configured ✅' if self.store.read('profile') else 'setup needed ⚠️'}",
+            f"📋 Order: {order_text(self.store.read('order'), local_now().date())}",
+            f"⏱️ Check interval: {interval_label(interval_minutes(self.store))}",
+            f"🔑 Automatic login: {'SUSPENDED 🛑' if state.get('authentication_blocked') else 'ready ✅'}",
+            f"🕘 Last full check: {state.get('completed', 'none yet')}",
         ]
         if state.get("last_error"):
-            lines.append(f"Last error: {state['last_error']}")
+            lines.append(f"⚠️ Last error: {state['last_error']}")
         return "\n".join(lines)

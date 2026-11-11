@@ -11,6 +11,7 @@ from .auth import load_credentials
 from .booking import (BOOKING_WINDOW_DAYS, BookingError, apply_plan, make_plan,
                       meal_number, MEALS, order_dates)
 from .store import Store, StoreError
+from .chatformat import RECOVERED_ALERT, booked_alert, problem_alert, suspended_alert
 from .telegram import Notifier
 from .paths import default_state_dir
 from .signing import SIGNING_KEY
@@ -225,7 +226,7 @@ def main(argv=None):
         if alerts and message.startswith("Confirmed:"):
             confirmed.append(message.removeprefix("Confirmed: ").rstrip("."))
         elif alerts and message == SUSPENDED_NOTICE:
-            outbox.append("Booking suspended. " + message)
+            outbox.append(suspended_alert(message))
     try:
         return run_command(args, store, emit, alerts, outbox, confirmed)
     finally:
@@ -241,10 +242,10 @@ def run_command(args, store, emit, alerts, outbox, confirmed):
                 execute(args, store, emit)
                 if alerts:
                     if confirmed:
-                        outbox.append(f"Booked {len(confirmed)} meal(s):\n" + "\n".join(confirmed))
+                        outbox.append(booked_alert(confirmed))
                     if (previous.get("failures") or previous.get("authentication_blocked")) \
                             and store.read("run_state", {}).get("completed"):
-                        outbox.append("Booking is working again.")
+                        outbox.append(RECOVERED_ALERT)
             except (ApiError, BookingError) as exc:
                 if args.command == "run" and not args.dry_run:
                     order = store.read("order", {})
@@ -268,7 +269,7 @@ def run_command(args, store, emit, alerts, outbox, confirmed):
                         emit(SUSPENDED_NOTICE)
                         return 1
                     if alerts and failures == 1:
-                        outbox.append(f"Booking problem: {exc} Ate will keep retrying.")
+                        outbox.append(problem_alert(str(exc)))
                 raise exc
     except (ApiError, BookingError, StoreError) as exc:
         emit(f"Error: {exc}")

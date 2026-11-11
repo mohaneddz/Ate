@@ -66,7 +66,7 @@ class CommandTests(unittest.TestCase):
         with patch("reserve_cli.botcommands.fetch_bookings", return_value=(rows, None)):
             text = self.commands.handle("/status")
         self.assertIn("Booking is healthy", text)
-        self.assertIn("Thu 12 Nov: breakfast, dinner", text)
+        self.assertIn("Thu 12 Nov   🍳 breakfast  🌙 dinner", text)
         self.assertNotIn("10 Nov", text)
 
     def test_status_warns_when_suspended_and_how_to_fix(self):
@@ -82,7 +82,7 @@ class CommandTests(unittest.TestCase):
         client.reservations.return_value = []
         with patch("reserve_cli.botcommands.Client", return_value=client):
             text = self.commands.handle("/plan")
-        self.assertIn("9 meal(s) in the window: 0 booked, 9 to book", text)
+        self.assertIn("9 meal(s) in the window: ✅ 0 booked, ⏳ 9 to book", text)
         self.assertIn("Thu 12 Nov", text)
         client.close.assert_called_once()
 
@@ -91,8 +91,8 @@ class CommandTests(unittest.TestCase):
         with patch("reserve_cli.botcommands.run_cli", return_value=(0, lines)) as run_cli:
             text = self.commands.handle("/sync")
         self.assertEqual(run_cli.call_args.args[1], ["run", "--force"])
-        self.assertIn("Booked 1 meal(s)", text)
-        self.assertIn("2026-11-12 dinner (#5)", text)
+        self.assertIn("✅ Booked 1 meal", text)
+        self.assertIn("🌙 dinner", text)
 
     def test_order_commands_validate_before_touching_anything(self):
         with patch("reserve_cli.botcommands.run_cli") as run_cli:
@@ -110,8 +110,8 @@ class CommandTests(unittest.TestCase):
 
     def test_pause_and_resume(self):
         with patch("reserve_cli.botcommands.run_cli", return_value=(0, [])) as run_cli:
-            self.assertEqual(self.commands.handle("/pause"), "Automatic booking paused.")
-            self.assertEqual(self.commands.handle("/resume"), "Automatic booking resumed.")
+            self.assertEqual(self.commands.handle("/pause"), "⏸️ Automatic booking paused.")
+            self.assertEqual(self.commands.handle("/resume"), "▶️ Automatic booking resumed.")
         self.assertEqual([call.args[1] for call in run_cli.call_args_list], [["order", "pause"], ["order", "resume"]])
 
     def test_log_shows_recent_events_only(self):
@@ -127,7 +127,7 @@ class CommandTests(unittest.TestCase):
 
     def test_service_errors_become_short_problems_and_unknown_ones_leak_nothing(self):
         with patch("reserve_cli.botcommands.fetch_bookings", side_effect=ApiError("The meal service returned HTTP 500.")):
-            self.assertEqual(self.commands.handle("/today"), "Problem: The meal service returned HTTP 500.")
+            self.assertEqual(self.commands.handle("/today"), "⚠️ Problem: The meal service returned HTTP 500.")
         with patch("reserve_cli.botcommands.fetch_bookings", side_effect=RuntimeError("secret detail")):
             self.assertNotIn("secret", self.commands.handle("/today"))
 
@@ -140,7 +140,7 @@ class CommandTests(unittest.TestCase):
     def test_summarise_cases(self):
         self.assertIn("Nothing to book", summarise(0, []))
         self.assertIn("2 meal(s) already", summarise(0, ["Already reserved: a (#1).", "Already reserved: b (#2)."]))
-        self.assertIn("Problem: boom", summarise(1, ["Error: boom"]))
+        self.assertIn("⚠️ Problem: boom", summarise(1, ["Error: boom"]))
 
 
 class ServeTests(unittest.TestCase):

@@ -139,8 +139,8 @@ class AlertTests(unittest.TestCase):
             self.store.write("run_state", {"revision": "one", "completed": "2026-11-11"})
         sent = self.scheduled("run", execute_effect=book)
         self.assertEqual(len(sent), 1)
-        self.assertIn("Booked 2 meal(s)", sent[0])
-        self.assertIn("2026-11-12 dinner (#2)", sent[0])
+        self.assertIn("✅ Booked 2 meals", sent[0])
+        self.assertIn("🌙 dinner", sent[0])
 
     def test_nothing_new_sends_nothing(self):
         self.assertEqual(self.scheduled("run", execute_effect=lambda *_: None), [])
@@ -154,7 +154,7 @@ class AlertTests(unittest.TestCase):
     def test_only_the_first_failure_in_a_streak_alerts(self):
         first = self.scheduled("run", error=ApiError("The meal service returned HTTP 500.", 500, "meal service"))
         self.assertEqual(len(first), 1)
-        self.assertIn("Booking problem", first[0])
+        self.assertIn("⚠️ Booking problem", first[0])
         state = self.store.read("run_state")
         state["retry_after"] = "2000-01-01T00:00:00+00:00"
         self.store.write("run_state", state)
@@ -168,7 +168,7 @@ class AlertTests(unittest.TestCase):
         self.store.write("run_state", state)
         sent = self.scheduled("run", error=self.rejected())
         self.assertEqual(len(sent), 1)
-        self.assertTrue(sent[0].startswith("Booking suspended."))
+        self.assertTrue(sent[0].startswith("🛑 Booking suspended"))
         self.assertIn(SUSPENDED_NOTICE, sent[0])
 
     def test_recovery_is_announced(self):
@@ -176,7 +176,7 @@ class AlertTests(unittest.TestCase):
 
         def recover(args, store, emit):
             self.store.write("run_state", {"revision": "one", "completed": "2026-11-11"})
-        self.assertEqual(self.scheduled("run", execute_effect=recover), ["Booking is working again."])
+        self.assertEqual(self.scheduled("run", execute_effect=recover), ["✅ Booking is working again."])
 
 
 class NotifierTests(unittest.TestCase):
@@ -250,6 +250,18 @@ class SetupCommandTests(unittest.TestCase):
         doctor(self.console, self.store)
         self.assertIn("sending to Mohaned", self.output.getvalue())
 
+
+class ChatFormatTests(unittest.TestCase):
+    def test_booked_alert_groups_meals_by_day(self):
+        from reserve_cli.chatformat import booked_alert
+        text = booked_alert(["2026-11-13 dinner (#3)", "2026-11-12 breakfast (#1)", "2026-11-12 lunch (#2)"])
+        self.assertTrue(text.startswith("✅ Booked 3 meals"))
+        self.assertLess(text.index("Thu 12 Nov"), text.index("Fri 13 Nov"))
+        self.assertIn("🍳 breakfast  🍽️ lunch", text)
+
+    def test_one_meal_is_singular_and_odd_lines_are_kept(self):
+        from reserve_cli.chatformat import booked_alert
+        self.assertTrue(booked_alert(["something unexpected"]).startswith("✅ Booked 1 meal\n"))
 
 if __name__ == "__main__":
     unittest.main()
