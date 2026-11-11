@@ -168,8 +168,10 @@ class Commands:
         if not 1 <= days <= MAX_DAYS:
             raise ValueError("Choose 1 to 366 days.")
         events = read_activity(self.store.directory / "runs.jsonl", local_now().date() - timedelta(days=days - 1))
+        # "Already reserved" repeats on every check and would bury the real events.
+        events = [e for e in events if not e["message"].startswith("Already reserved:")]
         if not events:
-            return f"No activity in the last {days} day(s)."
+            return f"No new activity in the last {days} day(s). Nothing was booked or failed."
         lines = [f"{datetime.fromisoformat(e['at']).strftime('%d %b %H:%M')}  {e['message'][:110]}"
                  for e in events[-12:]]
         return f"Last {len(lines)} event(s):\n" + "\n".join(lines)

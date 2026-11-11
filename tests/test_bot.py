@@ -117,10 +117,13 @@ class CommandTests(unittest.TestCase):
     def test_log_shows_recent_events_only(self):
         path = Path(self.temporary.name) / "runs.jsonl"
         path.write_text('{"at": "2026-11-11T08:00:00+01:00", "message": "Confirmed: 2026-11-12 dinner (#5)."}\n'
-                        '{"at": "2026-10-01T08:00:00+01:00", "message": "old event"}\n', encoding="utf-8")
+                        '{"at": "2026-10-01T08:00:00+01:00", "message": "old event"}\n'
+                        '{"at": "2026-11-11T08:05:00+01:00", "message": "Already reserved: 2026-11-12 lunch (#6)."}\n',
+                        encoding="utf-8")
         text = self.commands.handle("/log")
         self.assertIn("Confirmed: 2026-11-12 dinner", text)
         self.assertNotIn("old event", text)
+        self.assertNotIn("Already reserved", text)
 
     def test_service_errors_become_short_problems_and_unknown_ones_leak_nothing(self):
         with patch("reserve_cli.botcommands.fetch_bookings", side_effect=ApiError("The meal service returned HTTP 500.")):
