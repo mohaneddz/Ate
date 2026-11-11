@@ -214,7 +214,7 @@ class AuthSuspensionTests(unittest.TestCase):
     NOW = datetime(2026, 11, 11, 9, tzinfo=ZoneInfo("Africa/Algiers"))
 
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temporary.cleanup)
         self.store = Store(Path(self.temporary.name))
         self.store.write("profile", {**PROFILE, "student": "test-student", "password": "test-password"})
@@ -286,7 +286,7 @@ class StorageTests(unittest.TestCase):
     def test_interrupted_account_commit_recovers_on_next_read(self):
         import base64
         import json
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             store = Store(Path(temporary))
             original = {"student": "original", "password": "previous"}
             store.write("profile", original)
@@ -303,7 +303,7 @@ class StorageTests(unittest.TestCase):
             self.assertFalse((store.directory / "auth-transaction.bin").exists())
 
     def test_account_store_roundtrip_and_permissions(self):
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             store = Store(Path(temporary))
             value = {"password": "not-a-real-secret"}
             with store.lock():
@@ -321,7 +321,7 @@ class StorageTests(unittest.TestCase):
     def test_linux_lock_excludes_another_command(self):
         if os.name != "posix":
             self.skipTest("Linux file locking")
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             first = Store(Path(temporary))
             second = Store(Path(temporary))
             with first.lock():

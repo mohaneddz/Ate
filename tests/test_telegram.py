@@ -24,7 +24,7 @@ NOW = datetime(2026, 11, 11, 9, tzinfo=ZoneInfo("Africa/Algiers"))
 
 class BotFileTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temporary.cleanup)
 
     def write(self, text):
@@ -106,7 +106,7 @@ class PairingTests(unittest.TestCase):
 
 class AlertTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temporary.cleanup)
         self.store = Store(Path(self.temporary.name))
         self.store.write("profile", PROFILE)
@@ -181,7 +181,7 @@ class AlertTests(unittest.TestCase):
 
 class NotifierTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temporary.cleanup)
         self.store = Store(Path(self.temporary.name))
 
@@ -207,7 +207,7 @@ class NotifierTests(unittest.TestCase):
 
 class SetupCommandTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temporary.cleanup)
         self.store = Store(Path(self.temporary.name))
         self.output = io.StringIO()

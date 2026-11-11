@@ -24,7 +24,7 @@ from reserve_cli.store import Store
 
 class ShortCommandTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temp.cleanup)
         self.store = Store(Path(self.temp.name))
         self.output = io.StringIO()

@@ -29,6 +29,7 @@ from .paths import default_state_dir
 from .signing import SIGNING_KEY
 from .chatformat import CONNECTED_ALERT, TEST_ALERT
 from .telegram import TelegramBot, TelegramError, check_token, find_private_chat, load_bot_token
+from . import where
 
 STATE_DIR = default_state_dir()
 MAX_DAYS = 366
@@ -274,6 +275,36 @@ def telegram_command(console: Console, store: Store, argv: list[str]) -> int:
     return 0
 
 
+def switch_word(value: bool | None) -> str:
+    return "unknown" if value is None else "ON" if value else "OFF"
+
+
+def where_command(console: Console, store: Store, argv: list[str]) -> int:
+    name = argv[0].lower()
+    usage = f"Use {prog()} {name} on|off" + (f", or {prog()} cloud setup user@host [port]" if name == "cloud" else "") + "."
+    if name == "cloud" and len(argv) >= 2 and argv[1] == "setup":
+        if len(argv) not in (3, 4) or (len(argv) == 4 and not argv[3].isdecimal()):
+            raise ValueError(usage)
+        where.save_cloud(store, argv[2], int(argv[3]) if len(argv) == 4 else 22)
+        console.print(plain(f"✓ Server saved: {argv[2]}. Use {prog()} cloud on or off.", "green"))
+        return 0
+    if len(argv) > 2 or (len(argv) == 2 and argv[1].lower() not in ("on", "off")):
+        raise ValueError(usage)
+    wanted = None if len(argv) == 1 else argv[1].lower() == "on"
+    if name == "local":
+        if wanted is not None:
+            where.set_local(wanted)
+        state = where.local_state()
+        console.print(plain(f"Local booking (this machine): {switch_word(state)}", "green" if state else "yellow"))
+        return 0
+    if wanted is None:
+        state = where.cloud_state(store)
+    else:
+        state = where.set_cloud(store, wanted)
+    console.print(plain(f"Cloud booking (server): {switch_word(state)}", "green" if state else "yellow"))
+    return 0
+
+
 def help_screen(console: Console) -> None:
     name = prog()
     heading(console, f"{name}  /  Ate", "Webetu meal reservations • Algeria time")
@@ -295,6 +326,8 @@ def help_screen(console: Console) -> None:
         (f"{name} doctor", "Show setup, scheduler and recent run health."),
         (f"{name} telegram [FILE]", "Get booking alerts in Telegram; also 'telegram test' and 'telegram off'."),
         (f"{name} serve", "Run checks and answer Telegram commands continuously (for an always-on machine)."),
+        (f"{name} local on|off", "Switch booking on this machine on or off."),
+        (f"{name} cloud on|off", "Switch booking on your server on or off; first run 'cloud setup user@host [port]'."),
     ]:
         table.add_row(command, detail)
     console.print(table)
@@ -441,6 +474,15 @@ def doctor(console: Console, store: Store) -> None:
             )
         except OSError:
             pass
+    try:
+        local = where.local_state()
+    except where.WhereError:
+        local = None
+    table.add_row("Local booking", plain("not installed" if local is None else "on" if local else "off",
+                                         "green" if local else "yellow"))
+    cloud = where.cloud_target(store)
+    table.add_row("Cloud server", plain(f"{cloud['target']}:{cloud['port']}" if cloud else "not set (cloud setup)",
+                                        "green" if cloud else "dim"))
     table.add_row("Command in PATH", plain("Yes" if available else "No", "green" if available else "yellow"))
     table.add_row("Last completed", plain(run_state.get("completed", "—")))
     table.add_row("Automatic login", plain("Suspended" if run_state.get("authentication_blocked") else "Ready",
@@ -503,6 +545,8 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
             raise ValueError(f"Use {prog()} auth [CREDENTIAL-FILE].")
         credential_file = Path(argv[1].strip().strip('"')).expanduser() if len(argv) == 2 else None
         return auth_wizard(console, store, credential_file)
+    if command in ("local", "cloud"):
+        return where_command(console, store, argv)
     if command in ("telegram", "bot"):
         return telegram_command(console, store, argv)
     if command == "serve":
@@ -675,7 +719,8 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try:
         return run(sys.argv[1:] if argv is None else argv)
-    except (ApiError, BookingError, StoreError, TelegramError, ValueError, KeyError, TypeError, OSError) as exc:
+    except (ApiError, BookingError, StoreError, TelegramError, where.WhereError, ValueError, KeyError, TypeError,
+            OSError) as exc:
         # API failures are already sanitized by Client. Avoid printing raw response data.
         Console(highlight=False).print(plain(f"Error: {exc}", "bold red"))
         return 1

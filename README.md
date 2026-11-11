@@ -44,6 +44,10 @@ Booking only runs while your PC is awake. On a Debian or Ubuntu server that stay
 
 Only the chat paired with `ate telegram` is answered. Commands: `/status`, `/today`, `/plan`, `/sync`, `/log`, `/date`, `/days`, `/until`, `/pause`, `/resume`, `/interval`, `/config`, `/depots`, `/doctor` and `/help`. Signing in is the one thing that stays in the terminal, so your password never passes through chat.
 
+## Local and cloud switches
+
+`res local on|off` switches booking on this machine (its scheduled task) on or off. `res cloud on|off` does the same for your server by pausing or resuming the server's standing order over SSH, so the Telegram bot keeps answering either way. Run `res cloud setup user@host [port]` once to save the server. The two are independent: with both on, both machines check and book, and each looks at the live reservations before every write, so a meal is never booked twice. `res local` and `res cloud` with no argument show the current state, and `res doctor` lists both. If your SSH key has a passphrase, load it first with `ssh-add`.
+
 ## Remove
 
 On Windows, run `uninstall.bat` from the ZIP or Program Files. On Linux, run `~/.local/share/ate/uninstall.sh`. Both keep account data for an easy reinstall. On Linux, add `--purge-data` to delete it too. On Windows, use `scripts/uninstall-package.ps1 -PurgeData` from the ZIP to remove it.

@@ -26,7 +26,7 @@ def booking(day, meal, label):
 
 class CommandTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temporary.cleanup)
         self.store = Store(Path(self.temporary.name))
         self.store.write("profile", PROFILE)
@@ -145,7 +145,7 @@ class CommandTests(unittest.TestCase):
 
 class ServeTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temporary.cleanup)
         self.store = Store(Path(self.temporary.name))
         self.store.write("telegram", TELEGRAM)
