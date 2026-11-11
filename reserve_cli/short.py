@@ -412,6 +412,12 @@ def doctor(console: Console, store: Store) -> None:
             process = subprocess.run(["systemctl", "--user", "is-enabled", "ate.timer"],
                                      capture_output=True, text=True, errors="replace", timeout=10)
             task = "Installed" if process.returncode == 0 else "Missing"
+            if task == "Missing":
+                # A server install runs 'ate serve' as a system service instead of a user timer.
+                service = subprocess.run(["systemctl", "is-active", "ate.service"],
+                                         capture_output=True, text=True, errors="replace", timeout=10)
+                if service.returncode == 0:
+                    task = "Installed (ate serve)"
         except (OSError, subprocess.TimeoutExpired):
             task = "Could not check"
     table = Table(title="Health check", box=box.ROUNDED, show_header=False, border_style="bright_black")
@@ -419,7 +425,7 @@ def doctor(console: Console, store: Store) -> None:
     table.add_column("Value")
     table.add_row("Account", plain("Configured" if profile else "Setup needed", "green" if profile else "red"))
     table.add_row("Order", plain(order_text(order, today)))
-    table.add_row("Scheduler", plain(task, "green" if task == "Installed" else "yellow"))
+    table.add_row("Scheduler", plain(task, "green" if task.startswith("Installed") else "yellow"))
     available = bool(shutil.which("res") or shutil.which("ate"))
     if not available and sys.platform == "win32" and getattr(sys, "frozen", False):
         # The installer updates the user PATH, but a terminal opened before
