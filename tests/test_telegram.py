@@ -140,7 +140,7 @@ class AlertTests(unittest.TestCase):
         sent = self.scheduled("run", execute_effect=book)
         self.assertEqual(len(sent), 1)
         self.assertIn("✅ Booked 2 meals", sent[0])
-        self.assertIn("🌙 dinner", sent[0])
+        self.assertIn("🌙", sent[0])
 
     def test_nothing_new_sends_nothing(self):
         self.assertEqual(self.scheduled("run", execute_effect=lambda *_: None), [])
@@ -257,7 +257,17 @@ class ChatFormatTests(unittest.TestCase):
         text = booked_alert(["2026-11-13 dinner (#3)", "2026-11-12 breakfast (#1)", "2026-11-12 lunch (#2)"])
         self.assertTrue(text.startswith("✅ Booked 3 meals"))
         self.assertLess(text.index("Thu 12 Nov"), text.index("Fri 13 Nov"))
-        self.assertIn("🍳 breakfast  🍽️ lunch", text)
+        self.assertIn("Thu 12 Nov  🍳🍽️", text)
+
+    def test_days_with_the_same_meals_collapse_into_one_range(self):
+        from reserve_cli.chatformat import meals_block, short_order
+        full = ["breakfast", "lunch", "dinner"]
+        text = meals_block({"2026-11-12": full, "2026-11-13": full, "2026-11-14": full, "2026-11-16": full,
+                            "2026-11-30": ["dinner"], "2026-12-01": ["dinner"]})
+        self.assertEqual(text.splitlines(), ["📅 12–14 Nov  🍳🍽️🌙", "📅 Mon 16 Nov  🍳🍽️🌙",
+                                              "📅 30 Nov–01 Dec  🌙"])
+        self.assertEqual(short_order({"kind": "days", "days": 90}), "90d rolling")
+        self.assertEqual(short_order({"kind": "days", "days": 90, "paused": True}), "⏸️ paused")
 
     def test_one_meal_is_singular_and_odd_lines_are_kept(self):
         from reserve_cli.chatformat import booked_alert

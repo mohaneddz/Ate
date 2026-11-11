@@ -7,7 +7,7 @@ import io
 
 from . import cli
 from .api import ApiError, Client
-from .chatformat import COMMAND_ICONS, booked_alert, meals_block
+from .chatformat import COMMAND_ICONS, booked_alert, meals_block, short_order
 from .booking import BookingError, MEALS, make_plan, meal_number, order_dates
 from .config import interval_label, interval_minutes, parse_interval, set_interval
 from .short import MAX_DAYS, append_activity, fetch_bookings, local_now, order_text, parse_day, read_activity
@@ -113,14 +113,15 @@ class Commands:
     def auth(self, _arguments) -> str:
         return AUTH_REPLY
 
-    def health_line(self) -> str:
+    def health_line(self, order: dict | None) -> str:
         state = self.store.read("run_state", {})
         if state.get("authentication_blocked"):
-            return "🛑 Booking is SUSPENDED: the login was rejected.\n" + AUTH_REPLY
+            return "🛑 Suspended: login rejected. Run 'ate auth' on the server."
         if state.get("failures"):
-            return f"⚠️ Last run failed ({state.get('last_error', 'unknown error')}); retrying."
+            return f"⚠️ Last run failed: {state.get('last_error', 'unknown error')}. Retrying."
         done = state.get("completed")
-        return f"✅ Booking is healthy · last full check {done}" if done else "✅ Booking is healthy"
+        checked = f" · checked {date.fromisoformat(done):%d %b}" if done else ""
+        return f"✅ Healthy · {short_order(order)}{checked}"
 
     def upcoming(self, only_today: bool) -> str:
         today = local_now().date().isoformat()
@@ -132,13 +133,11 @@ class Commands:
             return "😴 No meals today." if only_today else "😴 No upcoming meals booked."
         text = meals_block(meals_by_day(rows))
         if cached_at:
-            text += f"\n\n📴 Offline view from {cached_at[:16].replace('T', ' ')}"
+            text += f"\n📴 offline view from {cached_at[:16].replace('T', ' ')}"
         return text
 
     def status(self, _arguments) -> str:
-        order = self.store.read("order")
-        header = f"📊 Status\n📋 {order_text(order, local_now().date())}\n{self.health_line()}"
-        return header + "\n\n" + self.upcoming(False)
+        return self.health_line(self.store.read("order")) + "\n" + self.upcoming(False)
 
     def today(self, _arguments) -> str:
         return self.upcoming(True)
@@ -168,7 +167,7 @@ class Commands:
             lines.append(meals_block(by_day))
         if deferred:
             lines.append(f"ℹ️ {deferred} later day(s) wait for the 3-day window.")
-        return "\n\n".join(lines)
+        return "\n".join(lines)
 
     def sync(self, _arguments) -> str:
         return summarise(*run_cli(self.store.directory, ["run", "--force"]))

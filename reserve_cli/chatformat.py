@@ -17,14 +17,38 @@ def meal_label(name: str) -> str:
     return f"{MEAL_ICONS.get(name, '•')} {name}"
 
 
-def day_heading(iso: str) -> str:
-    return "📅 " + date.fromisoformat(iso).strftime("%a %d %b")
+def meal_icons(meals: list[str]) -> str:
+    return "".join(icon for name, icon in MEAL_ICONS.items() if name in meals)
+
+
+def date_span(first: date, last: date) -> str:
+    if first == last:
+        return first.strftime("%a %d %b")
+    if first.month == last.month:
+        return f"{first:%d}–{last:%d %b}"
+    return f"{first:%d %b}–{last:%d %b}"
 
 
 def meals_block(entries: dict[str, list[str]]) -> str:
-    """Render {'2026-11-12': ['breakfast', 'dinner']} as one line per day."""
-    return "\n".join(f"{day_heading(day)}   " + "  ".join(meal_label(m) for m in meals)
-                     for day, meals in entries.items())
+    """Render {'2026-11-12': ['breakfast', 'dinner']} with one line per run of days that share the same meals."""
+    runs: list[list] = []
+    for iso in sorted(entries):
+        day, icons = date.fromisoformat(iso), meal_icons(entries[iso])
+        if runs and runs[-1][2] == icons and (day - runs[-1][1]).days == 1:
+            runs[-1][1] = day
+        else:
+            runs.append([day, day, icons])
+    return "\n".join(f"📅 {date_span(first, last)}  {icons}" for first, last, icons in runs)
+
+
+def short_order(order: dict | None) -> str:
+    if not order:
+        return "no order"
+    if order.get("paused"):
+        return "⏸️ paused"
+    if order.get("kind") == "days":
+        return f"{order['days']}d rolling"
+    return "until " + date.fromisoformat(order["until"]).strftime("%d %b")
 
 
 def booked_alert(confirmed: list[str]) -> str:
@@ -40,9 +64,9 @@ def booked_alert(confirmed: list[str]) -> str:
     count = sum(len(meals) for meals in grouped.values()) + len(unparsed)
     parts = [f"✅ Booked {count} meal{'s' if count != 1 else ''}"]
     if grouped:
-        parts.append(meals_block(dict(sorted(grouped.items()))))
+        parts.append(meals_block(grouped))
     parts.extend(unparsed)
-    return "\n\n".join(parts)
+    return "\n".join(parts)
 
 
 def problem_alert(detail: str) -> str:

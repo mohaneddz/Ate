@@ -65,15 +65,15 @@ class CommandTests(unittest.TestCase):
                 booking("2026-11-10", 1, "Petit-déjeuner")]
         with patch("reserve_cli.botcommands.fetch_bookings", return_value=(rows, None)):
             text = self.commands.handle("/status")
-        self.assertIn("Booking is healthy", text)
-        self.assertIn("Thu 12 Nov   🍳 breakfast  🌙 dinner", text)
+        self.assertIn("✅ Healthy · 3d rolling", text)
+        self.assertIn("Thu 12 Nov  🍳🌙", text)
         self.assertNotIn("10 Nov", text)
 
     def test_status_warns_when_suspended_and_how_to_fix(self):
         self.store.write("run_state", {"authentication_blocked": True})
         with patch("reserve_cli.botcommands.fetch_bookings", return_value=([], None)):
             text = self.commands.handle("/status")
-        self.assertIn("SUSPENDED", text)
+        self.assertIn("Suspended", text)
         self.assertIn("ate auth", text)
 
     def test_plan_counts_booked_and_missing_meals(self):
@@ -83,7 +83,7 @@ class CommandTests(unittest.TestCase):
         with patch("reserve_cli.botcommands.Client", return_value=client):
             text = self.commands.handle("/plan")
         self.assertIn("9 meal(s) in the window: ✅ 0 booked, ⏳ 9 to book", text)
-        self.assertIn("Thu 12 Nov", text)
+        self.assertIn("12–14 Nov", text)
         client.close.assert_called_once()
 
     def test_sync_summarises_the_run(self):
@@ -92,7 +92,7 @@ class CommandTests(unittest.TestCase):
             text = self.commands.handle("/sync")
         self.assertEqual(run_cli.call_args.args[1], ["run", "--force"])
         self.assertIn("✅ Booked 1 meal", text)
-        self.assertIn("🌙 dinner", text)
+        self.assertIn("🌙", text)
 
     def test_order_commands_validate_before_touching_anything(self):
         with patch("reserve_cli.botcommands.run_cli") as run_cli:
