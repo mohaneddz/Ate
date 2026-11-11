@@ -25,11 +25,18 @@ Both installers ask how many days to keep booked and start background checks. Up
 | `res config account` | Change your password or restaurants. |
 | `res pause` / `res resume` | Stop or restart automatic booking. |
 | `res log 30` | See recent reservations and activity. |
+| `res telegram bot.env` | Pair a Telegram bot for alerts; `res telegram test` and `res telegram off` also work. |
 | `res help` | See all commands. |
 
 Webetu opens reservations only a few days ahead. Ate checks again later; it cannot run while your computer is off or asleep. Cancelling `res auth` with Ctrl+C keeps the prior account, and an interrupted save is recovered on the next command.
 
 If the university login is rejected twice in a row, 30 minutes apart, Ate suspends automatic booking so it does not keep retrying a bad password. A suspended run writes one line to the log per day, and `res show`, `res log`, `res plan` and `res doctor` all warn about it. Run `res auth` to sign in again. A one-off server error at any other step only delays the next attempt.
+
+## Telegram alerts
+
+Create a bot with [@BotFather](https://t.me/BotFather), then put its HTTP API token in a file as `http=123456789:AA...`. Run `res telegram bot.env` (or `res telegram` to paste the token hidden), open the link it prints, press Start, and confirm your name. Only that private chat receives alerts. The token is stored encrypted for your Windows user, so you can delete the file afterwards.
+
+Scheduled runs message you when meals are booked, when the first failure of a streak happens, when booking is suspended (repeated daily), and when it recovers. Commands you run yourself, including `res sync`, stay silent. A failed alert is logged and never affects booking.
 
 ## Remove
 
