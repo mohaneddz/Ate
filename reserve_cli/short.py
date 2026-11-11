@@ -27,6 +27,7 @@ from .config import interval_label, interval_minutes, parse_interval, set_interv
 from .store import Store, StoreError
 from .paths import default_state_dir
 from .signing import SIGNING_KEY
+from .telegram import TelegramBot, TelegramError, check_token, find_private_chat, load_bot_token
 
 STATE_DIR = default_state_dir()
 MAX_DAYS = 366
@@ -225,6 +226,54 @@ def legacy(console: Console, args: list[str]) -> int:
     return result
 
 
+def telegram_command(console: Console, store: Store, argv: list[str]) -> int:
+    if len(argv) > 2:
+        raise ValueError(f"Use {prog()} telegram [FILE], {prog()} telegram test, or {prog()} telegram off.")
+    action = argv[1] if len(argv) == 2 else None
+    if action == "off":
+        with store.lock():
+            store.delete("telegram")
+        console.print(plain("Telegram alerts are off. Saved bot details were removed.", "green"))
+        return 0
+    if action == "test":
+        config = store.read("telegram")
+        if not config:
+            raise BookingError(f"Telegram is not set up. Run {prog()} telegram first.")
+        bot = TelegramBot(config["token"])
+        try:
+            bot.send(config["chat_id"], "Test alert from Ate. Alerts are working.")
+        finally:
+            bot.close()
+        console.print(plain(f"Test alert sent to {config.get('name', 'your chat')}.", "green"))
+        return 0
+    heading(console, "Telegram alerts", "Get a message when meals are booked or something needs attention")
+    if action:
+        token = load_bot_token(Path(action.strip().strip('"')).expanduser())
+    else:
+        token = check_token(getpass.getpass("Bot token from BotFather (hidden): "))
+    bot = TelegramBot(token)
+    try:
+        username = bot.me()["username"]
+        console.print(plain(f"Found bot @{username}.", "dim"))
+        console.print(plain(f"Open https://t.me/{username}, press Start, and send any message. Waiting up to 2 minutes…"))
+        chat = find_private_chat(bot)
+        if not chat:
+            raise BookingError("No private message reached the bot in time. Run the command again after pressing Start.")
+        answer = console.input(f"Send alerts to {chat['name']}? [Y/n]: ").strip().lower()
+        if answer in ("n", "no"):
+            console.print(plain("Cancelled; nothing was saved.", "yellow"))
+            return 0
+        with store.lock():
+            store.write("telegram", {"token": token, "chat_id": chat["chat_id"], "name": chat["name"]})
+        bot.send(chat["chat_id"], "Ate is connected. You will get a message here when meals are booked "
+                                  "or something needs attention.")
+    finally:
+        bot.close()
+    protection = "encrypted for your Windows user" if sys.platform == "win32" else "stored in files only your Linux user can read"
+    console.print(plain(f"✓ Telegram alerts are on. The bot token is {protection}; you can delete the bot file.", "green"))
+    return 0
+
+
 def help_screen(console: Console) -> None:
     name = prog()
     heading(console, f"{name}  /  Ate", "Webetu meal reservations • Algeria time")
@@ -244,6 +293,7 @@ def help_screen(console: Console) -> None:
         (f"{name} pause / resume", "Pause or resume automatic booking."),
         (f"{name} depots", "Show available restaurants and IDs."),
         (f"{name} doctor", "Show setup, scheduler and recent run health."),
+        (f"{name} telegram [FILE]", "Get booking alerts in Telegram; also 'telegram test' and 'telegram off'."),
     ]:
         table.add_row(command, detail)
     console.print(table)
@@ -388,6 +438,9 @@ def doctor(console: Console, store: Store) -> None:
     table.add_row("Last completed", plain(run_state.get("completed", "—")))
     table.add_row("Automatic login", plain("Suspended" if run_state.get("authentication_blocked") else "Ready",
                                                  "red" if run_state.get("authentication_blocked") else "green"))
+    telegram_config = store.read("telegram")
+    table.add_row("Telegram alerts", plain(f"On, sending to {telegram_config.get('name', 'your chat')}" if telegram_config
+                                           else "Off", "green" if telegram_config else "dim"))
     if run_state.get("last_error"):
         table.add_row("Last error", plain(f"{run_state['last_error']} ({run_state.get('last_error_at', 'time unknown')})", "yellow"))
     table.add_row("Recent log entries", str(len(activity)))
@@ -443,6 +496,8 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
             raise ValueError(f"Use {prog()} auth [CREDENTIAL-FILE].")
         credential_file = Path(argv[1].strip().strip('"')).expanduser() if len(argv) == 2 else None
         return auth_wizard(console, store, credential_file)
+    if command in ("telegram", "bot"):
+        return telegram_command(console, store, argv)
     if command == "background":
         if len(argv) == 3 and argv[1] == "--state-dir":
             store = Store(Path(argv[2]))
@@ -607,7 +662,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try:
         return run(sys.argv[1:] if argv is None else argv)
-    except (ApiError, BookingError, StoreError, ValueError, KeyError, TypeError, OSError) as exc:
+    except (ApiError, BookingError, StoreError, TelegramError, ValueError, KeyError, TypeError, OSError) as exc:
         # API failures are already sanitized by Client. Avoid printing raw response data.
         Console(highlight=False).print(plain(f"Error: {exc}", "bold red"))
         return 1
