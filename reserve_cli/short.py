@@ -179,6 +179,15 @@ def fetch_bookings(store: Store) -> tuple[list[dict], str | None]:
         client.close()
 
 
+def stallWarning(console: Console, store: Store) -> None:
+    state = store.read("run_state", {})
+    if state.get("authentication_blocked"):
+        console.print(plain(f"Automatic booking is suspended: your login was rejected. Run {prog()} auth.", "bold red"))
+    elif state.get("failures"):
+        console.print(plain(f"The last automatic run failed ({state.get('last_error', 'unknown error')}); it will retry.",
+                            "yellow"))
+
+
 def legacy(console: Console, args: list[str]) -> int:
     # Reuse the original CLI's locking, journal, retry, and duplicate checks.
     output = io.StringIO()
@@ -379,6 +388,8 @@ def doctor(console: Console, store: Store) -> None:
     table.add_row("Last completed", plain(run_state.get("completed", "—")))
     table.add_row("Automatic login", plain("Suspended" if run_state.get("authentication_blocked") else "Ready",
                                                  "red" if run_state.get("authentication_blocked") else "green"))
+    if run_state.get("last_error"):
+        table.add_row("Last error", plain(f"{run_state['last_error']} ({run_state.get('last_error_at', 'time unknown')})", "yellow"))
     table.add_row("Recent log entries", str(len(activity)))
     console.print(table)
 
@@ -469,6 +480,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
         if command == "today":
             rows = [row for row in rows if row["date_reserve"] == today.isoformat()]
         heading(console, "Your reservations", order_text(order, today))
+        stallWarning(console, store)
         if cache_time:
             console.print(plain(f"Offline view • last updated {cache_time}", "yellow"))
         if rows:
@@ -488,6 +500,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
             activity = read_activity(store.directory / "runs.jsonl", earliest)
         history = [row for row in rows if earliest.isoformat() <= row["date_reserve"] <= today.isoformat()]
         heading(console, f"Last {count} days", f"{earliest} through {today}")
+        stallWarning(console, store)
         if cache_time:
             console.print(plain(f"Offline reservations • last updated {cache_time}", "yellow"))
         if history:
@@ -526,6 +539,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
                 client.close()
             plan = make_plan(days, profile, depots, rows)
         heading(console, "Next booking plan", order_text(order, today))
+        stallWarning(console, store)
         if cache_time:
             console.print(plain(f"Reservations cached at {cache_time}", "yellow"))
         if plan:
