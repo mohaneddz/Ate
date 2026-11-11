@@ -11,6 +11,7 @@ from .auth import load_credentials
 from .booking import (BOOKING_WINDOW_DAYS, BookingError, apply_plan, make_plan,
                       meal_number, MEALS, order_dates)
 from .store import Store, StoreError
+from .telegram import Notifier
 from .paths import default_state_dir
 from .signing import SIGNING_KEY
 
@@ -210,14 +211,40 @@ def main(argv=None):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = parser().parse_args(argv)
     store = Store(args.state_dir)
+    # Only scheduled runs send alerts; a person running a command already sees its output.
+    alerts = args.command == "run" and not args.force and not args.dry_run
+    outbox, confirmed = [], []
+
+    def log_line(message):
+        store.append_log(json.dumps({"at": now_local().isoformat(), "message": message}, ensure_ascii=False))
+
     def emit(message):
         print(message)
         if args.command == "run":
-            store.append_log(json.dumps({"at": now_local().isoformat(), "message": message}, ensure_ascii=False))
+            log_line(message)
+        if alerts and message.startswith("Confirmed:"):
+            confirmed.append(message.removeprefix("Confirmed: ").rstrip("."))
+        elif alerts and message == SUSPENDED_NOTICE:
+            outbox.append("Booking suspended. " + message)
+    try:
+        return run_command(args, store, emit, alerts, outbox, confirmed)
+    finally:
+        if alerts:
+            Notifier(store).deliver(outbox, log_line)
+
+
+def run_command(args, store, emit, alerts, outbox, confirmed):
     try:
         with store.lock():
             try:
+                previous = store.read("run_state", {}) if alerts else {}
                 execute(args, store, emit)
+                if alerts:
+                    if confirmed:
+                        outbox.append(f"Booked {len(confirmed)} meal(s):\n" + "\n".join(confirmed))
+                    if (previous.get("failures") or previous.get("authentication_blocked")) \
+                            and store.read("run_state", {}).get("completed"):
+                        outbox.append("Booking is working again.")
             except (ApiError, BookingError) as exc:
                 if args.command == "run" and not args.dry_run:
                     order = store.read("order", {})
@@ -240,6 +267,8 @@ def main(argv=None):
                         emit(f"Error: {exc}")
                         emit(SUSPENDED_NOTICE)
                         return 1
+                    if alerts and failures == 1:
+                        outbox.append(f"Booking problem: {exc} Ate will keep retrying.")
                 raise exc
     except (ApiError, BookingError, StoreError) as exc:
         emit(f"Error: {exc}")

@@ -70,6 +70,10 @@ class Store:
         encrypted = _protect(json.dumps(value, ensure_ascii=False).encode("utf-8"))
         self._replace_bytes(name, encrypted)
 
+    def delete(self, name: str):
+        (self.directory / f"{name}.bin").unlink(missing_ok=True)
+        self._sync_directory()
+
     def _replace_bytes(self, name: str, data: bytes):
         fd, temporary = tempfile.mkstemp(dir=self.directory, prefix=".tmp-")
         try:
