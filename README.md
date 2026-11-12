@@ -33,11 +33,20 @@ Both installers ask how many days to keep booked and start background checks. Up
 | `res pause` / `res resume` | Stop or restart automatic booking. |
 | `res log 30` | See recent reservations and activity. |
 | `res telegram bot.env` | Pair a Telegram bot for alerts; `res telegram test` and `res telegram off` also work. |
+| `res update` | Install the newest release now; `res update check` only looks. |
+| `res version` | Show the installed version. |
+| `res config autoupdate off` | Stop automatic updates (`on` turns them back on). |
 | `res help` | See all commands. |
 
 Webetu opens reservations only a few days ahead. Ate checks again later; it cannot run while your computer is off or asleep. Cancelling `res auth` with Ctrl+C keeps the prior account, and an interrupted save is recovered on the next command.
 
 If the university login is rejected twice in a row, 30 minutes apart, Ate suspends automatic booking so it does not keep retrying a bad password. A suspended run writes one line to the log per day, and `res show`, `res log`, `res plan` and `res doctor` all warn about it. Run `res auth` to sign in again. A one-off server error at any other step only delays the next attempt.
+
+## Updates
+
+Ate checks GitHub for a newer release once a day during its background run and installs it by itself. It downloads only from this project's release page and checks the published SHA-256 before changing anything. If Telegram alerts are on, you get a message when the version changes.
+
+On Windows, the installer's one administrator prompt also registers an `AteUpdate` task that runs elevated and only installs the official release, so later updates need no prompt. On Linux, the executable in `~/.local/share/ate` replaces itself. Versions before 0.10.0 cannot update themselves: install the latest archive once, and updates are automatic from then on. Copies run from source, or the server wheel install, are not updated automatically; reinstall them the way you installed them.
 
 ## Telegram alerts
 
