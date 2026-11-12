@@ -34,6 +34,14 @@ UPDATE_TASK = "AteUpdate"
 WINDOWS_WAIT_SECONDS = 180
 
 
+def on_windows() -> bool:
+    return sys.platform == "win32"
+
+
+def on_linux() -> bool:
+    return sys.platform.startswith("linux")
+
+
 class UpdateError(Exception):
     pass
 
@@ -69,7 +77,7 @@ def latest_release() -> Release:
 
 
 def archive_name(version: str) -> str:
-    return f"Ate-{version}-linux.tar.gz" if sys.platform.startswith("linux") else f"Ate-{version}-win64.zip"
+    return f"Ate-{version}-linux.tar.gz" if on_linux() else f"Ate-{version}-win64.zip"
 
 
 def download(url: str, target: Path) -> None:
@@ -111,7 +119,7 @@ def file_digest(path: Path) -> str:
 
 def linux_app_dir() -> Path | None:
     """The folder install.sh uses, but only when this process is the executable installed there."""
-    if not (sys.platform.startswith("linux") and getattr(sys, "frozen", False)):
+    if not (on_linux() and getattr(sys, "frozen", False)):
         return None
     executable = Path(sys.executable).resolve()
     expected = (Path.home() / ".local" / "share" / "ate").resolve()
@@ -119,7 +127,7 @@ def linux_app_dir() -> Path | None:
 
 
 def windows_install_root() -> Path | None:
-    if not (sys.platform == "win32" and getattr(sys, "frozen", False)):
+    if not (on_windows() and getattr(sys, "frozen", False)):
         return None
     executable = Path(sys.executable).resolve()
     program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files")).resolve()
@@ -138,11 +146,11 @@ def windows_task_ready() -> bool:
 
 def blocker() -> str | None:
     """Why this copy cannot update itself, or None when it can."""
-    if sys.platform.startswith("linux"):
+    if on_linux():
         if linux_app_dir() is None:
             return "This copy was not installed by the Ate installer, so update it the way you installed it."
         return None
-    if sys.platform == "win32":
+    if on_windows():
         if windows_install_root() is None:
             return "This copy was not installed by the Ate installer, so update it the way you installed it."
         if not windows_task_ready():
@@ -222,7 +230,7 @@ def apply(release: Release) -> str:
     reason = blocker()
     if reason:
         raise UpdateError(reason)
-    if sys.platform == "win32":
+    if on_windows():
         return install_windows()
     install_linux(release, linux_app_dir())
     return release.version
@@ -265,7 +273,7 @@ def background(store: Store) -> tuple[list[str], list[str]]:
                 release = latest_release()
                 state["latest"] = release.version
                 if is_newer(release.version):
-                    if sys.platform == "win32":
+                    if on_windows():
                         start_windows_update()
                         logs.append(f"Updating Ate from {__version__} to {release.version}.")
                     else:

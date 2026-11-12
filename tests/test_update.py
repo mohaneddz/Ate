@@ -77,7 +77,8 @@ class LinuxInstallTests(unittest.TestCase):
             target.write_bytes(self.archive.read_bytes())
         with patch("reserve_cli.update.download", fake_download), \
                 patch("reserve_cli.update.published_digest", return_value=digest), \
-                patch("reserve_cli.update.sys.platform", "linux"), \
+                patch("reserve_cli.update.on_linux", return_value=True), \
+                patch("reserve_cli.update.on_windows", return_value=False), \
                 patch("reserve_cli.update.subprocess.run", return_value=started):
             update.install_linux(self.release, self.app_dir)
 
@@ -106,7 +107,8 @@ class BackgroundCheckTests(unittest.TestCase):
     def test_newer_release_is_applied_once_per_day(self):
         newer = update.Release("99.0.0", "v99.0.0")
         with patch("reserve_cli.update.blocker", return_value=None), \
-                patch("reserve_cli.update.sys.platform", "linux"), \
+                patch("reserve_cli.update.on_linux", return_value=True), \
+                patch("reserve_cli.update.on_windows", return_value=False), \
                 patch("reserve_cli.update.latest_release", return_value=newer) as lookup, \
                 patch("reserve_cli.update.apply") as apply:
             logs, alerts = update.background(self.store)
@@ -119,7 +121,8 @@ class BackgroundCheckTests(unittest.TestCase):
     def test_windows_hands_the_swap_to_the_elevated_task(self):
         newer = update.Release("99.0.0", "v99.0.0")
         with patch("reserve_cli.update.blocker", return_value=None), \
-                patch("reserve_cli.update.sys.platform", "win32"), \
+                patch("reserve_cli.update.on_windows", return_value=True), \
+                patch("reserve_cli.update.on_linux", return_value=False), \
                 patch("reserve_cli.update.latest_release", return_value=newer), \
                 patch("reserve_cli.update.start_windows_update") as start, \
                 patch("reserve_cli.update.apply") as apply:
