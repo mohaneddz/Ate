@@ -77,6 +77,10 @@ def suspended_alert(notice: str) -> str:
     return f"🛑 Booking suspended\n{notice}"
 
 
+def updated_alert(old: str, new: str) -> str:
+    return f"⬆️ Ate updated\n{old} → {new}"
+
+
 RECOVERED_ALERT = "✅ Booking is working again."
 TEST_ALERT = "🔔 Test alert from Ate. Alerts are working."
 CONNECTED_ALERT = ("👋 Ate is connected.\nYou will get a message here when meals are booked "

@@ -28,8 +28,9 @@ from .store import Store, StoreError
 from .paths import default_state_dir
 from .signing import SIGNING_KEY
 from .chatformat import CONNECTED_ALERT, TEST_ALERT
-from .telegram import TelegramBot, TelegramError, check_token, find_private_chat, load_bot_token
-from . import where
+from .telegram import Notifier, TelegramBot, TelegramError, check_token, find_private_chat, load_bot_token
+from . import update, where
+from .version import __version__
 
 STATE_DIR = default_state_dir()
 MAX_DAYS = 366
@@ -305,6 +306,24 @@ def where_command(console: Console, store: Store, argv: list[str]) -> int:
     return 0
 
 
+def update_command(console: Console, check_only: bool) -> int:
+    release = update.latest_release()
+    if not update.is_newer(release.version):
+        console.print(plain(f"✓ Ate {__version__} is the latest version.", "green"))
+        return 0
+    console.print(plain(f"Ate {release.version} is available; you have {__version__}.", "yellow"))
+    if check_only:
+        console.print(plain(f"Run {prog()} update to install it.", "dim"))
+        return 0
+    reason = update.blocker()
+    if reason:
+        raise update.UpdateError(reason)
+    console.print(plain("Downloading and checking the update…", "dim"))
+    installed = update.apply(release)
+    console.print(plain(f"✓ Ate {installed} is installed. Open a new terminal to use it.", "green"))
+    return 0
+
+
 def help_screen(console: Console) -> None:
     name = prog()
     heading(console, f"{name}  /  Ate", "Webetu meal reservations • Algeria time")
@@ -325,6 +344,8 @@ def help_screen(console: Console) -> None:
         (f"{name} depots", "Show available restaurants and IDs."),
         (f"{name} doctor", "Show setup, scheduler and recent run health."),
         (f"{name} telegram [FILE]", "Get booking alerts in Telegram; also 'telegram test' and 'telegram off'."),
+        (f"{name} update [check]", "Install the latest release now, or only check for one."),
+        (f"{name} version", "Show the installed version."),
         (f"{name} serve", "Run checks and answer Telegram commands continuously (for an always-on machine)."),
         (f"{name} local on|off", "Switch booking on this machine on or off."),
         (f"{name} cloud on|off", "Switch booking on your server on or off; first run 'cloud setup user@host [port]'."),
@@ -483,6 +504,9 @@ def doctor(console: Console, store: Store) -> None:
     cloud = where.cloud_target(store)
     table.add_row("Cloud server", plain(f"{cloud['target']}:{cloud['port']}" if cloud else "not set (cloud setup)",
                                         "green" if cloud else "dim"))
+    table.add_row("Auto update", plain("On" if update.autoupdate_enabled(store) else "Off",
+                                       "green" if update.autoupdate_enabled(store) else "yellow"))
+    table.add_row("Version", plain(__version__))
     table.add_row("Command in PATH", plain("Yes" if available else "No", "green" if available else "yellow"))
     table.add_row("Last completed", plain(run_state.get("completed", "—")))
     table.add_row("Automatic login", plain("Suspended" if run_state.get("authentication_blocked") else "Ready",
@@ -514,6 +538,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
             table.add_column("Setting", style="cyan")
             table.add_column("Value")
             table.add_row("Check interval", interval_label(interval_minutes(store)))
+            table.add_row("Auto update", "On" if update.autoupdate_enabled(store) else "Off")
             table.add_row("Standing order", order_text(store.read("order"), today))
             profile = store.read("profile") or {}
             table.add_row("Account", str(profile.get("student", "Not configured")))
@@ -523,6 +548,7 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
             console.print(f"Change: {prog()} config interval 15m | 2h | 1d")
             console.print(f"Order: {prog()} config days 3 | until MM-DD | pause | resume")
             console.print(f"Account or restaurants: {prog()} config account")
+            console.print(f"Updates: {prog()} config autoupdate on | off")
             return 0
         if len(argv) == 3 and argv[1] == "interval":
             minutes = parse_interval(argv[2])
@@ -539,12 +565,23 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
             return run([argv[1]], console, store)
         if len(argv) == 2 and argv[1] == "account":
             return run(["auth"], console, store)
+        if len(argv) == 3 and argv[1] == "autoupdate" and argv[2].lower() in ("on", "off"):
+            update.set_autoupdate(store, argv[2].lower() == "on")
+            console.print(plain(f"Auto update is {argv[2].lower()}.", "green"))
+            return 0
         raise ValueError(f"Use {prog()} config, or {prog()} config interval 15m | 2h | 1d.")
     if command in ("auth", "setup"):
         if len(argv) > 2:
             raise ValueError(f"Use {prog()} auth [CREDENTIAL-FILE].")
         credential_file = Path(argv[1].strip().strip('"')).expanduser() if len(argv) == 2 else None
         return auth_wizard(console, store, credential_file)
+    if command in ("version", "--version", "-v"):
+        console.print(plain(f"Ate {__version__}"))
+        return 0
+    if command == "update":
+        if len(argv) > 2 or (len(argv) == 2 and argv[1].lower() != "check"):
+            raise ValueError(f"Use {prog()} update or {prog()} update check.")
+        return update_command(console, check_only=len(argv) == 2)
     if command in ("local", "cloud"):
         return where_command(console, store, argv)
     if command in ("telegram", "bot"):
@@ -560,7 +597,12 @@ def run(argv: list[str], console: Console | None = None, store: Store | None = N
             store = Store(Path(argv[2]))
         elif len(argv) != 1:
             raise ValueError("Background runner takes no arguments except --state-dir PATH.")
-        return cli.main(["--state-dir", str(store.directory), "run"])
+        code = cli.main(["--state-dir", str(store.directory), "run"])
+        logs, alerts = update.background(store)
+        for line in logs:
+            append_activity(store, line)
+        Notifier(store).deliver(alerts, lambda text: append_activity(store, text))
+        return code
     if command.isdecimal():
         if len(argv) != 1 or not 1 <= int(command) <= MAX_DAYS:
             raise ValueError(f"Use {prog()} N with a number from 1 to 366.")
@@ -719,8 +761,8 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try:
         return run(sys.argv[1:] if argv is None else argv)
-    except (ApiError, BookingError, StoreError, TelegramError, where.WhereError, ValueError, KeyError, TypeError,
-            OSError) as exc:
+    except (ApiError, BookingError, StoreError, TelegramError, where.WhereError, update.UpdateError, ValueError,
+            KeyError, TypeError, OSError) as exc:
         # API failures are already sanitized by Client. Avoid printing raw response data.
         Console(highlight=False).print(plain(f"Error: {exc}", "bold red"))
         return 1
