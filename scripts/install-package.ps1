@@ -38,7 +38,8 @@ $freshExecutable = -not (Test-Path -LiteralPath $exePath -PathType Leaf)
 if ($defaultInstall) {
     $helper = Join-Path $packagePath 'scripts\manage-program-files.ps1'
     if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'The Program Files installer helper is missing.' }
-    $arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -PackageRoot "{1}"' -f $helper, $packagePath
+    $installUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -PackageRoot "{1}" -UserName "{2}"' -f $helper, $packagePath, $installUser
     $process = Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden -ArgumentList $arguments -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw "Program Files installation failed (exit code $($process.ExitCode))." }
 } else {

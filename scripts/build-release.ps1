@@ -30,9 +30,10 @@ try {
     Copy-Item -LiteralPath (Join-Path $release 'ate.exe') -Destination (Join-Path $package 'ate.exe') -Force
     Copy-Item -LiteralPath 'install.bat','uninstall.bat','res.cmd','README.md' -Destination $package -Force
     New-Item -ItemType Directory -Path (Join-Path $package 'scripts') -Force | Out-Null
-    foreach ($name in @('install-package.ps1','uninstall-package.ps1','manage-program-files.ps1','hidden-run.vbs')) {
+    foreach ($name in @('install-package.ps1','uninstall-package.ps1','manage-program-files.ps1','update-package.ps1','hidden-run.vbs')) {
         Copy-Item -LiteralPath (Join-Path 'scripts' $name) -Destination (Join-Path (Join-Path $package 'scripts') $name) -Force
     }
+    [System.IO.File]::WriteAllText((Join-Path $package 'VERSION'), $Version)
     $zip = Join-Path $release "Ate-$Version-win64.zip"
     Compress-Archive -LiteralPath $package -DestinationPath $zip -Force
     $digest = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
