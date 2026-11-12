@@ -46,7 +46,7 @@ If the university login is rejected twice in a row, 30 minutes apart, Ate suspen
 
 Ate checks GitHub for a newer release once a day during its background run and installs it by itself. It downloads only from this project's release page and checks the published SHA-256 before changing anything. If Telegram alerts are on, you get a message when the version changes.
 
-On Windows, the installer's one administrator prompt also registers an `AteUpdate` task that runs elevated and only installs the official release, so later updates need no prompt. On Linux, the executable in `~/.local/share/ate` replaces itself. Versions before 0.10.0 cannot update themselves: install the latest archive once, and updates are automatic from then on. Copies run from source, or the server wheel install, are not updated automatically; reinstall them the way you installed them.
+On Windows, the installer's one administrator prompt also registers an `AteUpdate` task that runs elevated and only installs the official release, so later updates need no prompt. On Linux, the executable in `~/.local/share/ate` replaces itself. Versions before 0.10.1 cannot update themselves: install the latest archive once, and updates are automatic from then on. Copies run from source, or the server wheel install, are not updated automatically; reinstall them the way you installed them.
 
 ## Telegram alerts
 
