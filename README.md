@@ -4,6 +4,13 @@
 
 Ate keeps your Webetu meals booked while your computer is signed in and online. It checks existing reservations before booking breakfast and dinner at your dorm, lunch at your dorm on Friday and Saturday, and lunch at your main restaurant Sunday through Thursday.
 
+## Screenshots
+
+| | |
+| --- | --- |
+| ![res show](screenshots/show.avif)<br>`res show` lists your current and upcoming meals. | ![res log](screenshots/log.avif)<br>`res log` shows past reservations and activity. |
+| ![res auth](screenshots/auth.avif)<br>`res auth` signs you in and picks your restaurants. | ![res help](screenshots/help.avif)<br>`res help` lists every command. |
+
 ## Install
 
 **Windows 10/11:** Download and extract the [latest Windows ZIP](https://github.com/mohaneddz/Ate/releases/latest). Double-click `install.bat`, approve the administrator prompt, and enter your account and restaurant details. Python is not needed. The app goes to Program Files; your account data stays encrypted for your Windows user.
